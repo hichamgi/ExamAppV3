@@ -1,0 +1,10 @@
+RewriteEngine On
+Options -Indexes
+
+# Si le fichier/dossier existe, le servir directement
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Sinon passer au front controller
+RewriteRule ^ index.php [QSA,L]

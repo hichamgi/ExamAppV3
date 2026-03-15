@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="title desc">
+  <title>ExamApp Logo</title>
+  <desc>Document icon with folded corner and bold red A plus text</desc>
+
+  <rect width="256" height="256" fill="#ffffff"/>
+
+  <path
+    d="M64 28H152L192 68V208C192 220.15 182.15 230 170 230H64C51.85 230 42 220.15 42 208V50C42 37.85 51.85 28 64 28Z"
+    fill="#ffffff"
+    stroke="#c9242f"
+    stroke-width="6"
+    stroke-linejoin="round"/>
+
+  <path
+    d="M152 28V56C152 62.63 157.37 68 164 68H192"
+    fill="#ffffff"
+    stroke="#c9242f"
+    stroke-width="6"
+    stroke-linecap="round"
+    stroke-linejoin="round"/>
+
+  <text
+    x="117"
+    y="145"
+    text-anchor="middle"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="74"
+    font-weight="800"
+    fill="#c9242f">A+</text>
+</svg>

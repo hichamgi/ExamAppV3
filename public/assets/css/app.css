@@ -1,0 +1,221 @@
+:root {
+    --app-red: #c9242f;
+    --app-red-dark: #a71d27;
+    --app-bg: #f6f7fb;
+    --app-text: #1f2430;
+    --app-muted: #6b7280;
+    --app-card: #ffffff;
+    --app-border: #e7e9f0;
+    --app-shadow: 0 12px 32px rgba(20, 24, 40, 0.08);
+    --app-radius: 1.25rem;
+}
+
+@font-face {
+    font-family: 'AlMaghribi';
+    /* Chemin vers votre fichier de police */
+    src: url('fonts/AALMAGHRIBI_v4.9.6.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+.texte-maghribi {
+    font-family: 'AlMaghribi', serif;
+    font-size: 1.25rem;
+}
+
+html, body {
+    min-height: 100%;
+}
+
+body.app-body {
+    background:
+        radial-gradient(circle at top right, rgba(201, 36, 47, 0.08), transparent 22%),
+        radial-gradient(circle at bottom left, rgba(201, 36, 47, 0.05), transparent 20%),
+        var(--app-bg);
+    color: var(--app-text);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+.app-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.app-main {
+    flex: 1;
+}
+
+.hero-card,
+.app-card,
+.glass-panel,
+.stats-card,
+.info-tile {
+    background: var(--app-card);
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-radius);
+    box-shadow: var(--app-shadow);
+}
+
+.app-card {
+    overflow: hidden;
+    padding: 1.5rem;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+}
+
+.shadow-soft {
+    box-shadow: 0 18px 45px rgba(20, 24, 40, 0.10);
+}
+
+.hero-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.hero-card::after {
+    content: "";
+    position: absolute;
+    top: -40px;
+    right: -40px;
+    width: 180px;
+    height: 180px;
+    background: rgba(201, 36, 47, 0.06);
+    border-radius: 50%;
+}
+
+.glass-panel {
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(6px);
+}
+
+.icon-badge,
+.stats-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(201, 36, 47, 0.10);
+    color: var(--app-red);
+    font-size: 1.25rem;
+}
+
+.stats-card {
+    padding: 1.25rem;
+}
+
+.stats-value {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1;
+    margin-top: .75rem;
+    margin-bottom: .4rem;
+}
+
+.stats-label {
+    color: var(--app-muted);
+    font-size: .95rem;
+}
+
+.mini-info {
+    display: flex;
+    gap: .9rem;
+    align-items: flex-start;
+    padding: .9rem 1rem;
+    border: 1px solid var(--app-border);
+    border-radius: 1rem;
+    background: #fff;
+}
+
+.mini-info i {
+    color: var(--app-red);
+    font-size: 1.2rem;
+    line-height: 1;
+    margin-top: .15rem;
+}
+
+.info-tile {
+    padding: 1rem 1.1rem;
+}
+
+.info-label {
+    color: var(--app-muted);
+    font-size: .85rem;
+    margin-bottom: .3rem;
+}
+
+.info-value {
+    font-weight: 700;
+}
+
+.status-line {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-dot-success {
+    background: #22c55e;
+    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.15);
+}
+
+.navbar-brand img {
+    border-radius: .8rem;
+    background: #fff;
+}
+
+.btn-danger {
+    background-color: var(--app-red);
+    border-color: var(--app-red);
+}
+
+.btn-danger:hover,
+.btn-danger:focus {
+    background-color: var(--app-red-dark);
+    border-color: var(--app-red-dark);
+}
+
+.nav-pills .nav-link.active {
+    background-color: var(--app-red);
+}
+
+.table thead th {
+    white-space: nowrap;
+}
+
+#admin-active-sessions table,
+#admin-alerts .alert-item {
+    font-size: .95rem;
+}
+
+.alert-item {
+    border: 1px solid var(--app-border);
+    border-radius: 1rem;
+    padding: .85rem 1rem;
+    background: #fff;
+    margin-bottom: .75rem;
+}
+
+.dropdown-menu .dropdown-item {
+    padding: .65rem 1rem;
+    border-radius: .75rem;
+}
+
+.dropdown-menu .dropdown-item:hover {
+    background-color: rgba(201, 36, 47, 0.08);
+}
+
+@media (max-width: 991.98px) {
+    .hero-card::after {
+        width: 120px;
+        height: 120px;
+    }
+}
