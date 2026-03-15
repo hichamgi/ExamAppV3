@@ -1,12 +1,10 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Services;
 
 use App\Core\Database;
 
-final class ClassAdminService
+class ClassAdminService
 {
     public function listClasses(): array
     {
@@ -19,13 +17,15 @@ final class ClassAdminService
                 c.is_active,
                 c.created_at,
                 c.updated_at,
-                COUNT(DISTINCT cs.user_id) AS students_count,
-                SUM(CASE WHEN u.can_login = 1 THEN 1 ELSE 0 END) AS can_login_count
+                COUNT(DISTINCT CASE WHEN u.is_active = 1 AND u.numero > 0 THEN cs.user_id END) AS students_count,
+                COUNT(DISTINCT CASE WHEN u.is_active = 1 AND u.numero > 0 AND u.can_login = 1 THEN cs.user_id END) AS can_login_count
             FROM classes c
             LEFT JOIN class_students cs ON cs.class_id = c.id
             LEFT JOIN users u ON u.id = cs.user_id
+            LEFT JOIN roles r ON r.id = u.role_id
+            WHERE r.code = 'student' OR r.code IS NULL
             GROUP BY c.id, c.name, c.school_year, c.is_active, c.created_at, c.updated_at
-            ORDER BY c.name ASC, c.school_year DESC
+            ORDER BY c.school_year DESC, c.name ASC
             "
         );
 
@@ -47,11 +47,12 @@ final class ClassAdminService
                 c.is_active,
                 c.created_at,
                 c.updated_at,
-                COUNT(DISTINCT cs.user_id) AS students_count,
-                SUM(CASE WHEN u.can_login = 1 THEN 1 ELSE 0 END) AS can_login_count
+                COUNT(DISTINCT CASE WHEN r.code = 'student' AND u.is_active = 1 AND u.numero > 0 THEN cs.user_id END) AS students_count,
+                COUNT(DISTINCT CASE WHEN r.code = 'student' AND u.is_active = 1 AND u.numero > 0 AND u.can_login = 1 THEN cs.user_id END) AS can_login_count
             FROM classes c
             LEFT JOIN class_students cs ON cs.class_id = c.id
             LEFT JOIN users u ON u.id = cs.user_id
+            LEFT JOIN roles r ON r.id = u.role_id
             WHERE c.id = :id
             GROUP BY c.id, c.name, c.school_year, c.is_active, c.created_at, c.updated_at
             LIMIT 1
@@ -91,6 +92,8 @@ final class ClassAdminService
             INNER JOIN roles r ON r.id = u.role_id
             WHERE cs.class_id = :class_id
               AND r.code = 'student'
+              AND u.is_active = 1
+              AND u.numero > 0
             ORDER BY u.numero ASC, u.nom ASC, u.prenom ASC
             ",
             ['class_id' => $classId]

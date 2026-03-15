@@ -1,12 +1,10 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Services;
 
 use App\Core\Database;
 
-final class LoginAuthorizationService
+class LoginAuthorizationService
 {
     public function allowStudentLogin(int $userId): int
     {
@@ -43,12 +41,26 @@ final class LoginAuthorizationService
             WHERE cs.class_id = :class_id
               AND r.code = 'student'
               AND u.is_active = 1
+              AND u.numero > 0
             ORDER BY u.numero ASC, u.id ASC
             ",
             ['class_id' => $classId]
         );
 
         if ($students === []) {
+            Database::execute(
+                "
+                UPDATE users u
+                INNER JOIN class_students cs ON cs.user_id = u.id
+                SET u.can_login = 0,
+                    u.updated_at = NOW()
+                WHERE cs.class_id = :class_id
+                ",
+                ['class_id' => $classId]
+            );
+
+            $this->closeUnauthorizedSessionsByClass($classId);
+
             return 0;
         }
 
@@ -109,20 +121,29 @@ final class LoginAuthorizationService
             return 0;
         }
 
-        $affected = Database::execute(
-            "
-            UPDATE users
-            SET can_login = :can_login,
-                updated_at = NOW()
-            WHERE id = :id
-            ",
-            [
-                'id' => $userId,
-                'can_login' => $allowed ? 1 : 0,
-            ]
-        );
+        if ($allowed) {
+            $affected = Database::execute(
+                "
+                UPDATE users
+                SET can_login = 1,
+                    updated_at = NOW()
+                WHERE id = :id
+                  AND is_active = 1
+                  AND numero > 0
+                ",
+                ['id' => $userId]
+            );
+        } else {
+            $affected = Database::execute(
+                "
+                UPDATE users
+                SET can_login = 0,
+                    updated_at = NOW()
+                WHERE id = :id
+                ",
+                ['id' => $userId]
+            );
 
-        if (!$allowed) {
             Database::execute(
                 "
                 UPDATE user_sessions
@@ -145,25 +166,66 @@ final class LoginAuthorizationService
             return 0;
         }
 
-        $affected = Database::execute(
-            "
-            UPDATE users u
-            INNER JOIN class_students cs ON cs.user_id = u.id
-            SET u.can_login = :can_login,
-                u.updated_at = NOW()
-            WHERE cs.class_id = :class_id
-            ",
-            [
-                'class_id' => $classId,
-                'can_login' => $allowed ? 1 : 0,
-            ]
-        );
-
         if (!$allowed) {
+            $affected = Database::execute(
+                "
+                UPDATE users u
+                INNER JOIN class_students cs ON cs.user_id = u.id
+                SET u.can_login = 0,
+                    u.updated_at = NOW()
+                WHERE cs.class_id = :class_id
+                ",
+                ['class_id' => $classId]
+            );
+
             $this->closeUnauthorizedSessionsByClass($classId);
+
+            return $affected;
         }
 
-        return $affected;
+        Database::transaction(function () use ($classId): void {
+            Database::execute(
+                "
+                UPDATE users u
+                INNER JOIN class_students cs ON cs.user_id = u.id
+                SET u.can_login = 0,
+                    u.updated_at = NOW()
+                WHERE cs.class_id = :class_id
+                ",
+                ['class_id' => $classId]
+            );
+
+            Database::execute(
+                "
+                UPDATE users u
+                INNER JOIN class_students cs ON cs.user_id = u.id
+                INNER JOIN roles r ON r.id = u.role_id
+                SET u.can_login = 1,
+                    u.updated_at = NOW()
+                WHERE cs.class_id = :class_id
+                  AND r.code = 'student'
+                  AND u.is_active = 1
+                  AND u.numero > 0
+                ",
+                ['class_id' => $classId]
+            );
+        });
+
+        return Database::fetchValue(
+            "
+            SELECT COUNT(*)
+            FROM class_students cs
+            INNER JOIN users u ON u.id = cs.user_id
+            INNER JOIN roles r ON r.id = u.role_id
+            WHERE cs.class_id = :class_id
+              AND r.code = 'student'
+              AND u.is_active = 1
+              AND u.numero > 0
+              AND u.can_login = 1
+            ",
+            ['class_id' => $classId],
+            0
+        );
     }
 
     private function closeUnauthorizedSessionsByClass(int $classId): void

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <!-- Arc du HAUT (Chemin pour l'arabe) -->
+        <path id="arcTop" d="M 50,150 A 100,100 0 0,1 250,150" fill="none" />
+        <!-- Arc du BAS (Chemin pour le français) -->
+        <path id="arcBottom" d="M 50,150 A 100,100 0 0,0 250,150" fill="none" />
+    </defs>
+    
+    <!-- Cercle Extérieur -->
+    <circle cx="150" cy="150" r="130" fill="none" stroke="#004aad" stroke-width="5" />
+    
+    <!-- Cercle Intérieur -->
+    <circle cx="150" cy="150" r="90" fill="none" stroke="#004aad" stroke-width="1.5" stroke-dasharray="8,4" opacity="0.5"/>
+    
+    <!-- ÉTOILES : Alignées sur l'axe central Y=150 -->
+    <text x="40" y="158" text-anchor="middle" fill="#C41E3A" font-size="28" font-family="Arial">★</text>
+    <text x="260" y="158" text-anchor="middle" fill="#C41E3A" font-size="28" font-family="Arial">★</text>
+    
+    <!-- 1. TEXTE ARABE (HAUT) -->
+    <!-- dy="-12" remonte le texte pour compenser la ligne de base basse de l'arabe -->
+    <text fill="#004aad" font-family="'AALMAGHRIBI', 'Amiri', serif" font-weight="bold" font-size="32" dy="-6">
+        <textPath href="#arcTop" startOffset="50%" text-anchor="middle">
+            هــــــشـــــــام عـــــــريـــــــض
+        </textPath>
+    </text>
+    
+    <!-- 2. TEXTE FRANÇAIS (BAS) -->
+    <text fill="#004aad" font-family="'Roboto', Arial, sans-serif" font-weight="bold" font-size="26" letter-spacing="8">
+        <textPath href="#arcBottom" startOffset="50%" text-anchor="middle" dominant-baseline="hanging">
+            HICHAM ARID
+        </textPath>
+    </text>
+    
+    <!-- Indicateur Signature (Centre) -->
+    <text x="150" y="155" text-anchor="middle" fill="#004aad" font-size="14" font-family="Arial" opacity="0.2">
+        Signature
+    </text>
+</svg>
