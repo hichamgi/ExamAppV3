@@ -30,9 +30,18 @@ final class AdminStudentController extends Controller
         $this->guardAdmin();
 
         $search = $this->request()->string('search');
-        $classId = $this->request()->int('class_id');
-        $canLogin = $this->request()->has('can_login') ? $this->request()->int('can_login') : null;
-        $isActive = $this->request()->has('is_active') ? $this->request()->int('is_active') : null;
+        $classId = $this->request()->filled('class_id')
+            ? $this->request()->int('class_id')
+            : 0;
+
+        $canLogin = $this->request()->filled('can_login')
+            ? $this->request()->int('can_login')
+            : null;
+
+        $isActive = $this->request()->filled('is_active')
+            ? $this->request()->int('is_active')
+            : null;
+
         $page = $this->request()->int('page', 1);
 
         $students = $this->studentService->paginateStudents(

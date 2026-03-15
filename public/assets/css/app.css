@@ -213,6 +213,15 @@ body.app-body {
     background-color: rgba(201, 36, 47, 0.08);
 }
 
+.table td .btn-group {
+    vertical-align: middle;
+}
+
+.table td {
+    padding-top: .35rem;
+    padding-bottom: .35rem;
+}
+
 @media (max-width: 991.98px) {
     .hero-card::after {
         width: 120px;

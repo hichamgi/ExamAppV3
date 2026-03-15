@@ -1,13 +1,10 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Services;
 
 use App\Core\Database;
-use App\Core\SessionManager;
 
-final class StudentAdminService
+class StudentAdminService
 {
     public function paginateStudents(
         string $search = '',
@@ -29,7 +26,8 @@ final class StudentAdminService
                 u.code_massar LIKE :search
                 OR u.nom LIKE :search
                 OR u.prenom LIKE :search
-                OR CONCAT(u.nom, ' ', u.prenom) LIKE :search
+                OR u.nom_ar LIKE :search
+                OR u.prenom_ar LIKE :search
             )";
             $params['search'] = '%' . $search . '%';
         }
@@ -87,7 +85,12 @@ final class StudentAdminService
             LEFT JOIN class_students cs ON cs.user_id = u.id
             LEFT JOIN classes c ON c.id = cs.class_id
             WHERE {$whereSql}
-            ORDER BY c.name ASC, u.numero ASC, u.nom ASC, u.prenom ASC
+            ORDER BY
+                c.name ASC,
+                CASE WHEN u.numero = 0 THEN 1 ELSE 0 END ASC,
+                CASE WHEN u.numero = 0 THEN 999999 ELSE u.numero END ASC,
+                u.nom ASC,
+                u.prenom ASC
             LIMIT {$perPage} OFFSET {$offset}
         ";
 
@@ -149,7 +152,8 @@ final class StudentAdminService
         $affected = Database::execute(
             "
             UPDATE users
-            SET is_active = :is_active,
+            SET
+                is_active = :is_active,
                 can_login = CASE WHEN :is_active = 0 THEN 0 ELSE can_login END,
                 updated_at = NOW()
             WHERE id = :id
@@ -176,7 +180,8 @@ final class StudentAdminService
         $affected = Database::execute(
             "
             UPDATE users
-            SET can_login = :can_login,
+            SET
+                can_login = :can_login,
                 updated_at = NOW()
             WHERE id = :id
             ",
@@ -202,7 +207,8 @@ final class StudentAdminService
         return Database::execute(
             "
             UPDATE user_sessions
-            SET status = 'closed',
+            SET
+                status = 'closed',
                 closed_at = NOW(),
                 updated_at = NOW()
             WHERE user_id = :user_id
@@ -278,9 +284,11 @@ final class StudentAdminService
 
     private function normalizeStudent(array $row): array
     {
+        $numero = (int) ($row['numero'] ?? 0);
+
         return [
             'id' => (int) $row['id'],
-            'numero' => (int) ($row['numero'] ?? 0),
+            'numero' => $numero,
             'code_massar' => (string) ($row['code_massar'] ?? ''),
             'can_login' => (bool) ($row['can_login'] ?? false),
             'is_active' => (bool) ($row['is_active'] ?? false),
@@ -294,6 +302,7 @@ final class StudentAdminService
             'school_year' => (string) ($row['school_year'] ?? ''),
             'last_login_at' => (string) ($row['last_login_at'] ?? ''),
             'active_sessions' => (int) ($row['active_sessions'] ?? 0),
+            'is_archived_candidate' => ($numero === 0),
         ];
     }
 }
