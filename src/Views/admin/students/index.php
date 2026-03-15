@@ -296,7 +296,7 @@ $buildPageUrl = static function (int $page) use ($queryBase): string {
 </div>
 
 <form id="student-action-form" method="POST" action="" class="d-none">
-    <input type="hidden" name="_token" value="">
+    <input type="hidden" name="_csrf" value="">
     <input type="hidden" name="user_id" value="">
     <input type="hidden" name="value" value="">
 </form>
@@ -327,7 +327,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
-    const tokenInput = actionForm.querySelector('input[name="_token"]');
+    const tokenInput = actionForm.querySelector('input[name="_csrf"]');
     const userIdInput = actionForm.querySelector('input[name="user_id"]');
     const valueInput = actionForm.querySelector('input[name="value"]');
 

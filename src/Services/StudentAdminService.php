@@ -23,13 +23,19 @@ class StudentAdminService
 
         if ($search !== '') {
             $where[] = "(
-                u.code_massar LIKE :search
-                OR u.nom LIKE :search
-                OR u.prenom LIKE :search
-                OR u.nom_ar LIKE :search
-                OR u.prenom_ar LIKE :search
+                u.code_massar LIKE :search_code
+                OR u.nom LIKE :search_nom
+                OR u.prenom LIKE :search_prenom
+                OR u.nom_ar LIKE :search_nom_ar
+                OR u.prenom_ar LIKE :search_prenom_ar
             )";
-            $params['search'] = '%' . $search . '%';
+
+            $searchLike = '%' . $search . '%';
+            $params['search_code'] = $searchLike;
+            $params['search_nom'] = $searchLike;
+            $params['search_prenom'] = $searchLike;
+            $params['search_nom_ar'] = $searchLike;
+            $params['search_prenom_ar'] = $searchLike;
         }
 
         if ($classId !== null && $classId > 0) {
@@ -149,18 +155,21 @@ class StudentAdminService
             return 0;
         }
 
+        $isActive = $active ? 1 : 0;
+
         $affected = Database::execute(
             "
             UPDATE users
             SET
                 is_active = :is_active,
-                can_login = CASE WHEN :is_active = 0 THEN 0 ELSE can_login END,
+                can_login = CASE WHEN :force_disable_login = 0 THEN 0 ELSE can_login END,
                 updated_at = NOW()
             WHERE id = :id
             ",
             [
                 'id' => $userId,
-                'is_active' => $active ? 1 : 0,
+                'is_active' => $isActive,
+                'force_disable_login' => $isActive,
             ]
         );
 

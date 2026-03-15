@@ -249,7 +249,8 @@ final class App
         $router->post('/admin/students/toggle-active', [AdminStudentController::class, 'toggleActive']);
         $router->post('/admin/students/toggle-can-login', [AdminStudentController::class, 'toggleCanLogin']);
         $router->post('/admin/students/force-logout', [AdminStudentController::class, 'forceLogout']);
-
+        $router->post('/admin/students/toggle-login', [AdminStudentController::class, 'toggleCanLogin']);
+        
         /*
         |--------------------------------------------------------------------------
         | Admin - classes

@@ -2,6 +2,7 @@
 /.env
 /prompt.md
 /ARCHITECTURE_EXAMAPPV3.md
+/tampon.html
 
 /storage/cache/*
 !/storage/cache/.gitkeep
