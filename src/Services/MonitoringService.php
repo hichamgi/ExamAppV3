@@ -51,6 +51,7 @@ final class MonitoringService
                 us.class_id,
                 us.computer_id,
                 us.ip_address,
+                us.user_agent,
                 us.network_type,
                 us.status,
                 us.started_at,
@@ -59,10 +60,10 @@ final class MonitoringService
                 u.code_massar,
                 u.nom,
                 u.prenom,
-                c.name AS class_name,
                 r.code AS role_code,
+                r.name AS role_name,
+                c.name AS class_name,
                 lc.name AS computer_name,
-                lc.hostname,
                 lc.room_name
             FROM user_sessions us
             INNER JOIN users u ON u.id = us.user_id
@@ -70,29 +71,32 @@ final class MonitoringService
             LEFT JOIN classes c ON c.id = us.class_id
             LEFT JOIN lab_computers lc ON lc.id = us.computer_id
             WHERE us.status = 'active'
-            ORDER BY us.last_activity_at DESC
+            ORDER BY us.last_activity_at DESC, us.id DESC
             "
         );
 
         return array_map(
             static fn(array $row): array => [
-                'id' => (int) $row['id'],
+                'session_id' => (int) $row['id'],
                 'user_id' => (int) $row['user_id'],
                 'class_id' => isset($row['class_id']) ? (int) $row['class_id'] : null,
                 'computer_id' => isset($row['computer_id']) ? (int) $row['computer_id'] : null,
-                'role' => (string) $row['role_code'],
-                'numero' => (int) ($row['numero'] ?? 0),
-                'code_massar' => (string) ($row['code_massar'] ?? ''),
-                'student_name' => trim(((string) $row['nom']) . ' ' . ((string) $row['prenom'])),
-                'class_name' => (string) ($row['class_name'] ?? ''),
-                'computer_name' => (string) ($row['computer_name'] ?? ''),
-                'hostname' => (string) ($row['hostname'] ?? ''),
-                'room_name' => (string) ($row['room_name'] ?? ''),
                 'ip_address' => (string) ($row['ip_address'] ?? ''),
+                'user_agent' => (string) ($row['user_agent'] ?? ''),
                 'network_type' => (string) ($row['network_type'] ?? 'unknown'),
                 'status' => (string) ($row['status'] ?? ''),
                 'started_at' => (string) ($row['started_at'] ?? ''),
                 'last_activity_at' => (string) ($row['last_activity_at'] ?? ''),
+                'numero' => (int) ($row['numero'] ?? 0),
+                'code_massar' => (string) ($row['code_massar'] ?? ''),
+                'nom' => (string) ($row['nom'] ?? ''),
+                'prenom' => (string) ($row['prenom'] ?? ''),
+                'display_name' => trim(((string) ($row['nom'] ?? '')) . ' ' . ((string) ($row['prenom'] ?? ''))),
+                'role_code' => (string) ($row['role_code'] ?? ''),
+                'role_name' => (string) ($row['role_name'] ?? ''),
+                'class_name' => (string) ($row['class_name'] ?? ''),
+                'computer_name' => (string) ($row['computer_name'] ?? ''),
+                'room_name' => (string) ($row['room_name'] ?? ''),
             ],
             $rows
         );
@@ -217,6 +221,227 @@ final class MonitoringService
                 ] : null,
             ],
             $rows
+        );
+    }
+
+    public function blockStudentBySession(int $sessionId): int
+    {
+        if ($sessionId <= 0) {
+            return 0;
+        }
+
+        $session = Database::fetchOne(
+            "
+            SELECT us.user_id
+            FROM user_sessions us
+            INNER JOIN users u ON u.id = us.user_id
+            INNER JOIN roles r ON r.id = u.role_id
+            WHERE us.id = :session_id
+            AND us.status = 'active'
+            AND r.code = 'student'
+            LIMIT 1
+            ",
+            ['session_id' => $sessionId]
+        );
+
+        if (!$session) {
+            return 0;
+        }
+
+        $userId = (int) $session['user_id'];
+
+        Database::execute(
+            "
+            UPDATE users
+            SET
+                can_login = 0,
+                updated_at = NOW()
+            WHERE id = :user_id
+            ",
+            ['user_id' => $userId]
+        );
+
+        return Database::execute(
+            "
+            UPDATE user_sessions
+            SET
+                status = 'closed',
+                closed_at = NOW(),
+                updated_at = NOW()
+            WHERE user_id = :user_id
+            AND status = 'active'
+            ",
+            ['user_id' => $userId]
+        );
+    }
+
+    public function markCurrentExamAsCheatBySession(int $sessionId): bool
+    {
+        if ($sessionId <= 0) {
+            return false;
+        }
+
+        Database::beginTransaction();
+
+        try {
+            $session = Database::fetchOne(
+                "
+                SELECT
+                    us.id AS session_id,
+                    us.user_id,
+                    us.class_id
+                FROM user_sessions us
+                INNER JOIN users u ON u.id = us.user_id
+                INNER JOIN roles r ON r.id = u.role_id
+                WHERE us.id = :session_id
+                AND us.status = 'active'
+                AND r.code = 'student'
+                LIMIT 1
+                ",
+                ['session_id' => $sessionId]
+            );
+
+            if (!$session) {
+                Database::rollBack();
+                return false;
+            }
+
+            $userId = (int) $session['user_id'];
+            $classId = isset($session['class_id']) ? (int) $session['class_id'] : 0;
+
+            $userExam = Database::fetchOne(
+                "
+                SELECT
+                    ue.id,
+                    ue.started_at
+                FROM user_exams ue
+                WHERE ue.user_id = :user_id
+                AND ue.class_id = :class_id
+                AND ue.status = 'started'
+                AND ue.submitted_at IS NULL
+                ORDER BY ue.started_at DESC, ue.id DESC
+                LIMIT 1
+                FOR UPDATE
+                ",
+                [
+                    'user_id' => $userId,
+                    'class_id' => $classId,
+                ]
+            );
+
+            if (!$userExam) {
+                Database::rollBack();
+                return false;
+            }
+
+            $userExamId = (int) $userExam['id'];
+
+            Database::execute(
+                "
+                UPDATE user_exams
+                SET
+                    is_cheat = 1,
+                    score = 0,
+                    status = 'cancelled',
+                    submitted_at = NOW(),
+                    duration_seconds = CASE
+                        WHEN started_at IS NOT NULL
+                            THEN TIMESTAMPDIFF(SECOND, started_at, NOW())
+                        ELSE duration_seconds
+                    END,
+                    updated_at = NOW()
+                WHERE id = :user_exam_id
+                ",
+                ['user_exam_id' => $userExamId]
+            );
+
+            Database::execute(
+                "
+                INSERT INTO exam_results (
+                    user_exam_id,
+                    total_questions,
+                    answered_questions,
+                    correct_questions,
+                    wrong_questions,
+                    blank_questions,
+                    final_score,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    :user_exam_id,
+                    0, 0, 0, 0, 0,
+                    0,
+                    NOW(),
+                    NOW()
+                )
+                ON DUPLICATE KEY UPDATE
+                    final_score = 0,
+                    updated_at = NOW()
+                ",
+                ['user_exam_id' => $userExamId]
+            );
+
+            Database::execute(
+                "
+                UPDATE user_sessions
+                SET
+                    status = 'closed',
+                    closed_at = NOW(),
+                    updated_at = NOW()
+                WHERE id = :session_id
+                AND status = 'active'
+                ",
+                ['session_id' => $sessionId]
+            );
+
+            Database::commit();
+            return true;
+        } catch (\Throwable $e) {
+            Database::rollBack();
+            throw $e;
+        }
+    }
+
+    public function forceLogoutBySession(int $sessionId): int
+    {
+        if ($sessionId <= 0) {
+            return 0;
+        }
+
+        return Database::execute(
+            "
+            UPDATE user_sessions
+            SET
+                status = 'closed',
+                closed_at = NOW(),
+                updated_at = NOW()
+            WHERE id = :session_id
+            AND status = 'active'
+            ",
+            ['session_id' => $sessionId]
+        );
+    }
+
+    public function forceLogoutByIp(string $ipAddress): int
+    {
+        $ipAddress = trim($ipAddress);
+
+        if ($ipAddress === '') {
+            return 0;
+        }
+
+        return Database::execute(
+            "
+            UPDATE user_sessions
+            SET
+                status = 'closed',
+                closed_at = NOW(),
+                updated_at = NOW()
+            WHERE ip_address = :ip_address
+            AND status = 'active'
+            ",
+            ['ip_address' => $ipAddress]
         );
     }
 }

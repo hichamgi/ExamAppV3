@@ -192,25 +192,31 @@ final class ExamAdminService
         }
 
         $examIds = $ranges[$semester];
-
         $selectNotes = [];
         $params = [];
 
         foreach ($examIds as $examId) {
             $noteColumn = 'note_' . $examId;
-            $examParam = 'exam_' . $examId;
+
+            $examParamCheat = 'exam_' . $examId . '_cheat';
+            $examParamAbsent = 'exam_' . $examId . '_absent';
+            $examParamScore = 'exam_' . $examId . '_score';
 
             $selectNotes[] = "
                 MAX(
                     CASE
-                        WHEN ue.exam_id = :{$examParam}
-                        THEN COALESCE(er.final_score, ue.score, 0)
+                        WHEN ue.exam_id = :{$examParamCheat} AND ue.is_cheat = 1 THEN 'T'
+                        WHEN ue.exam_id = :{$examParamAbsent} AND ue.is_absent = 1 THEN 'A'
+                        WHEN ue.exam_id = :{$examParamScore}
+                            THEN CAST(COALESCE(er.final_score, ue.score, 0) AS CHAR)
                         ELSE NULL
                     END
                 ) AS {$noteColumn}
             ";
 
-            $params[$examParam] = $examId;
+            $params[$examParamCheat] = $examId;
+            $params[$examParamAbsent] = $examId;
+            $params[$examParamScore] = $examId;
         }
 
         $sql = "
@@ -223,6 +229,7 @@ final class ExamAdminService
             LEFT JOIN exam_results er ON er.user_exam_id = ue.id
             WHERE r.code = 'student'
             AND u.numero > 0
+            AND u.is_active = 1
             GROUP BY u.id, u.code_massar
             ORDER BY u.code_massar ASC
         ";
@@ -231,27 +238,16 @@ final class ExamAdminService
 
         $handle = fopen('php://temp', 'r+');
 
-        if ($semester === 's1') {
-            fputcsv($handle, [
-                'Code MASSAR',
-                'note 1',
-                'note 2',
-                'note 3',
-                'note 4',
-                'note 5',
-                'note 6',
-            ], ';');
-        } else {
-            fputcsv($handle, [
-                'Code MASSAR',
-                'note 7',
-                'note 8',
-                'note 9',
-                'note 10',
-                'note 11',
-                'note 12',
-            ], ';');
-        }
+        fputcsv(
+            $handle,
+            array_merge(
+                ['Code MASSAR'],
+                array_map(static fn(int $id): string => 'note ' . $id, $examIds)
+            ),
+            ';',
+            '"',
+            '\\'
+        );
 
         foreach ($rows as $row) {
             $line = [(string) ($row['code_massar'] ?? '')];
@@ -261,7 +257,7 @@ final class ExamAdminService
                 $line[] = $value === null ? '' : (string) $value;
             }
 
-            fputcsv($handle, $line, ';');
+            fputcsv($handle, $line, ';', '"', '\\');
         }
 
         rewind($handle);

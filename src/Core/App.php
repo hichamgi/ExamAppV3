@@ -278,10 +278,10 @@ final class App
         |--------------------------------------------------------------------------
         */
         $router->get('/admin/exams', [AdminExamController::class, 'index']);
+        $router->get('/admin/exams/export-semester', [AdminExamController::class, 'exportSemester']);
         $router->get('/admin/exams/{id}', [AdminExamController::class, 'show']);
         $router->post('/admin/exams/toggle-active', [AdminExamController::class, 'toggleActive']);
         $router->post('/admin/exams/toggle-print', [AdminExamController::class, 'togglePrint']);
-        $router->get('/admin/exams/export-semester', [AdminExamController::class, 'exportSemester']);
 
         /*
         |--------------------------------------------------------------------------
@@ -289,6 +289,10 @@ final class App
         |--------------------------------------------------------------------------
         */
         $router->get('/admin/monitoring', [AdminMonitoringController::class, 'index']);
+        $router->post('/admin/monitoring/force-logout', [AdminMonitoringController::class, 'forceLogout']);
+        $router->post('/admin/monitoring/block-student', [AdminMonitoringController::class, 'blockStudent']);
+        $router->post('/admin/monitoring/mark-cheat', [AdminMonitoringController::class, 'markCheat']);
+        $router->post('/admin/monitoring/force-logout-ip', [AdminMonitoringController::class, 'forceLogoutIp']);
 
         $router->get('/health', function (): void {
             header('Content-Type: application/json; charset=UTF-8');
