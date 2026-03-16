@@ -100,6 +100,6 @@ final class AdminMonitoringController extends Controller
             exit;
         }
 
-        $this->authService->refreshAuthenticatedSession(false);
+        $this->authService->refreshAuthenticatedSession(true);
     }
 }

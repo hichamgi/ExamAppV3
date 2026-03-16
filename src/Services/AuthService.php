@@ -286,6 +286,80 @@ final class AuthService
         SessionManager::enforceTimeout();
         SessionManager::enforceIntegrity(false, true);
 
+        if (!SessionManager::check()) {
+            return;
+        }
+
+        $auth = SessionManager::auth();
+
+        if (!is_array($auth)) {
+            return;
+        }
+
+        $currentDbSession = SessionManager::currentDatabaseSession();
+
+        if ($currentDbSession === null) {
+            $sessionToken = (string) ($auth['session_token'] ?? '');
+
+            if ($sessionToken !== '') {
+                $existingSession = Database::fetchOne(
+                    "
+                    SELECT id
+                    FROM user_sessions
+                    WHERE session_token = :session_token
+                    LIMIT 1
+                    ",
+                    ['session_token' => $sessionToken]
+                );
+
+                $payload = [
+                    'user_id' => (int) ($auth['user_id'] ?? 0),
+                    'class_id' => isset($auth['class_id']) ? (int) $auth['class_id'] : null,
+                    'ip_address' => (string) ($_SERVER['REMOTE_ADDR'] ?? ($auth['ip'] ?? '')),
+                    'user_agent' => (string) ($_SERVER['HTTP_USER_AGENT'] ?? ($auth['user_agent'] ?? '')),
+                    'network_type' => 'unknown',
+                    'status' => 'active',
+                    'last_activity_at' => date('Y-m-d H:i:s'),
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ];
+
+                if ($existingSession) {
+                    Database::execute(
+                        "
+                        UPDATE user_sessions
+                        SET
+                            user_id = :user_id,
+                            class_id = :class_id,
+                            ip_address = :ip_address,
+                            user_agent = :user_agent,
+                            network_type = :network_type,
+                            status = :status,
+                            last_activity_at = :last_activity_at,
+                            closed_at = NULL,
+                            updated_at = :updated_at
+                        WHERE session_token = :session_token
+                        ",
+                        $payload + ['session_token' => $sessionToken]
+                    );
+                } else {
+                    Database::insert('user_sessions', [
+                        'session_token' => $sessionToken,
+                        'user_id' => $payload['user_id'],
+                        'class_id' => $payload['class_id'],
+                        'computer_id' => null,
+                        'ip_address' => $payload['ip_address'],
+                        'user_agent' => $payload['user_agent'],
+                        'network_type' => $payload['network_type'],
+                        'status' => $payload['status'],
+                        'started_at' => date('Y-m-d H:i:s'),
+                        'last_activity_at' => $payload['last_activity_at'],
+                        'created_at' => date('Y-m-d H:i:s'),
+                        'updated_at' => $payload['updated_at'],
+                    ]);
+                }
+            }
+        }
+
         if ($touchDatabase) {
             static $lastRefreshAt = 0;
             $now = time();
