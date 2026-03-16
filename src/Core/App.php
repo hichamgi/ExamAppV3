@@ -281,6 +281,7 @@ final class App
         $router->get('/admin/exams/{id}', [AdminExamController::class, 'show']);
         $router->post('/admin/exams/toggle-active', [AdminExamController::class, 'toggleActive']);
         $router->post('/admin/exams/toggle-print', [AdminExamController::class, 'togglePrint']);
+        $router->get('/admin/exams/export-semester', [AdminExamController::class, 'exportSemester']);
 
         /*
         |--------------------------------------------------------------------------

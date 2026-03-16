@@ -180,6 +180,97 @@ final class ExamAdminService
         );
     }
 
+    public function buildSemesterCsv(string $semester): string
+    {
+        $ranges = [
+            's1' => [1, 2, 3, 4, 5, 6],
+            's2' => [7, 8, 9, 10, 11, 12],
+        ];
+
+        if (!isset($ranges[$semester])) {
+            return '';
+        }
+
+        $examIds = $ranges[$semester];
+
+        $selectNotes = [];
+        $params = [];
+
+        foreach ($examIds as $examId) {
+            $noteColumn = 'note_' . $examId;
+            $examParam = 'exam_' . $examId;
+
+            $selectNotes[] = "
+                MAX(
+                    CASE
+                        WHEN ue.exam_id = :{$examParam}
+                        THEN COALESCE(er.final_score, ue.score, 0)
+                        ELSE NULL
+                    END
+                ) AS {$noteColumn}
+            ";
+
+            $params[$examParam] = $examId;
+        }
+
+        $sql = "
+            SELECT
+                u.code_massar,
+                " . implode(",\n", $selectNotes) . "
+            FROM users u
+            INNER JOIN roles r ON r.id = u.role_id
+            LEFT JOIN user_exams ue ON ue.user_id = u.id
+            LEFT JOIN exam_results er ON er.user_exam_id = ue.id
+            WHERE r.code = 'student'
+            AND u.numero > 0
+            GROUP BY u.id, u.code_massar
+            ORDER BY u.code_massar ASC
+        ";
+
+        $rows = Database::fetchAll($sql, $params);
+
+        $handle = fopen('php://temp', 'r+');
+
+        if ($semester === 's1') {
+            fputcsv($handle, [
+                'Code MASSAR',
+                'note 1',
+                'note 2',
+                'note 3',
+                'note 4',
+                'note 5',
+                'note 6',
+            ], ';');
+        } else {
+            fputcsv($handle, [
+                'Code MASSAR',
+                'note 7',
+                'note 8',
+                'note 9',
+                'note 10',
+                'note 11',
+                'note 12',
+            ], ';');
+        }
+
+        foreach ($rows as $row) {
+            $line = [(string) ($row['code_massar'] ?? '')];
+
+            foreach ($examIds as $examId) {
+                $value = $row['note_' . $examId] ?? '';
+                $line[] = $value === null ? '' : (string) $value;
+            }
+
+            fputcsv($handle, $line, ';');
+        }
+
+        rewind($handle);
+        $csv = stream_get_contents($handle);
+        fclose($handle);
+
+        return "\xEF\xBB\xBF" . $csv;
+    }
+
     private function normalizeExam(array $row): array
     {
         return [

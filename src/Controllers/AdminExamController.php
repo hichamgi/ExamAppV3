@@ -87,6 +87,29 @@ final class AdminExamController extends Controller
         $this->redirect(base_url('admin/exams'));
     }
 
+    public function exportSemester(): void
+    {
+        $this->guardAdmin();
+
+        $semester = strtolower($this->request()->string('semester'));
+
+        if (!in_array($semester, ['s1', 's2'], true)) {
+            $this->abort(400, 'Semestre invalide.');
+            return;
+        }
+
+        $csv = $this->examService->buildSemesterCsv($semester);
+
+        $filename = 'notes_' . $semester . '_' . date('Ymd_His') . '.csv';
+
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+
+        echo $csv;
+        exit;
+    }
+
     private function guardAdmin(): void
     {
         SessionManager::enforceTimeout();

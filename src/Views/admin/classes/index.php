@@ -26,17 +26,15 @@
                         <td><?= e((string) $class['students_count']) ?></td>
                         <td><?= e((string) $class['can_login_count']) ?></td>
                         <td class="text-end">
-                            <form method="POST" action="<?= e(base_url('admin/classes/allow-login')) ?>" class="d-inline">
-                                <?= \App\Core\Csrf::input('admin.class.auth') ?>
-                                <input type="hidden" name="class_id" value="<?= e((string) $class['id']) ?>">
-                                <button class="btn btn-sm btn-outline-success">Autoriser classe</button>
-                            </form>
-
-                            <form method="POST" action="<?= e(base_url('admin/classes/deny-login')) ?>" class="d-inline">
-                                <?= \App\Core\Csrf::input('admin.class.auth') ?>
-                                <input type="hidden" name="class_id" value="<?= e((string) $class['id']) ?>">
-                                <button class="btn btn-sm btn-outline-danger">Bloquer classe</button>
-                            </form>
+                            <a
+                                href="<?= e(base_url('admin/classes/' . (int) $class['id'])) ?>"
+                                class="btn btn-sm btn-outline-primary"
+                                data-bs-toggle="tooltip"
+                                title="Gérer les autorisations"
+                                aria-label="Gérer les autorisations"
+                            >
+                                <i class="bi bi-shield-lock me-1"></i> Gérer
+                            </a>
                         </td>
                     </tr>
                 <?php endforeach; ?>
