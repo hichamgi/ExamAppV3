@@ -167,7 +167,6 @@ Contrôleurs principaux :
 * `AdminComputerController`
 * `AdminStudentController`
 * `AdminClassController`
-* `AdminAuthorizationController`
 * `AdminExamController`
 * `AdminMonitoringController`
 

@@ -77,11 +77,6 @@ $displayName = is_array($auth) ? (string) ($auth['display_name'] ?? '') : '';
                                     </a>
                                 </li>
                                 <li>
-                                    <a class="dropdown-item" href="<?= e(base_url('admin/authorizations')) ?>">
-                                        <i class="bi bi-person-lock me-2"></i>Autorisations
-                                    </a>
-                                </li>
-                                <li>
                                     <a class="dropdown-item" href="<?= e(base_url('admin/exams')) ?>">
                                         <i class="bi bi-journal-check me-2"></i>Examens
                                     </a>

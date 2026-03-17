@@ -7,7 +7,6 @@ use Throwable;
 use App\Controllers\AuthController;
 use App\Controllers\AdminController;
 use App\Controllers\StudentController;
-use App\Controllers\AdminAuthorizationController;
 use App\Controllers\AdminClassController;
 use App\Controllers\AdminComputerController;
 use App\Controllers\AdminExamController;
@@ -251,15 +250,6 @@ final class App
         $router->post('/admin/classes/allow-login', [AdminClassController::class, 'allowClassLogin']);
         $router->post('/admin/classes/deny-login', [AdminClassController::class, 'denyClassLogin']);
         $router->post('/admin/classes/allow-group-login', [AdminClassController::class, 'allowGroupLogin']);
-
-        /*
-        |--------------------------------------------------------------------------
-        | Admin - authorizations
-        |--------------------------------------------------------------------------
-        */
-        $router->get('/admin/authorizations', [AdminAuthorizationController::class, 'index']);
-        $router->post('/admin/authorizations/allow-student', [AdminAuthorizationController::class, 'allowStudent']);
-        $router->post('/admin/authorizations/deny-student', [AdminAuthorizationController::class, 'denyStudent']);
 
         /*
         |--------------------------------------------------------------------------
