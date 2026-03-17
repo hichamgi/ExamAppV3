@@ -16,6 +16,7 @@
 *.tmp
 *.bak
 *.swp
+*.old
 .DS_Store
 Thumbs.db
 
