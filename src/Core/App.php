@@ -200,17 +200,6 @@ final class App
             exit;
         });
 
-        //$router->get('/login', function (): void {echo '<h1>Login</h1>';});
-        $router->get('/', function (): void {
-            $controller = new class extends \App\Core\Controller {
-                public function home(): void
-                {
-                    $this->render('home.index', ['title' => 'Accueil'], 'layouts.main');
-                }
-            };
-            $controller->home();
-        });
-
         $router->get('/login', [AuthController::class, 'showLogin']);
         $router->post('/login', [AuthController::class, 'login']);
         $router->post('/logout', [AuthController::class, 'logout']);
@@ -247,7 +236,7 @@ final class App
         $router->get('/admin/students', [AdminStudentController::class, 'index']);
         $router->get('/admin/students/{id}', [AdminStudentController::class, 'show']);
         $router->post('/admin/students/toggle-active', [AdminStudentController::class, 'toggleActive']);
-        $router->post('/admin/students/toggle-can-login', [AdminStudentController::class, 'toggleCanLogin']);
+        //$router->post('/admin/students/toggle-can-login', [AdminStudentController::class, 'toggleCanLogin']);
         $router->post('/admin/students/force-logout', [AdminStudentController::class, 'forceLogout']);
         $router->post('/admin/students/toggle-login', [AdminStudentController::class, 'toggleCanLogin']);
         
