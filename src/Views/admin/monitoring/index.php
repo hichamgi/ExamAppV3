@@ -74,7 +74,7 @@
                                                 type="submit"
                                                 class="btn btn-sm btn-outline-danger"
                                                 data-bs-toggle="tooltip"
-                                                title="Déconnecter toutes les sessions admin de cette IP"
+                                                title="Déconnecter les anciennes sessions admin de cette IP"
                                             >
                                                 <i class="bi bi-router"></i>
                                             </button>
@@ -82,7 +82,7 @@
                                     <?php else: ?>
                                         <form method="POST" action="<?= e(base_url('admin/monitoring/force-logout')) ?>" class="d-inline">
                                             <input type="hidden" name="_csrf" value="<?= e($csrf_monitoring_action) ?>">
-                                            <input type="hidden" name="session_id" value="<?= (int) ($session['session_id'] ?? 0) ?>">
+                                            <input type="hidden" name="session_id" value="<?= (int) ($session['id'] ?? 0) ?>">
 
                                             <button
                                                 type="submit"

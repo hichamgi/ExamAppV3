@@ -81,9 +81,10 @@ final class AdminMonitoringController extends Controller
         Csrf::assertRequest($this->request(), 'admin.monitoring.action');
 
         $ipAddress = trim($this->request()->string('ip_address'));
+        $keepSessionId = $this->request()->int('session_id');
 
-        if ($ipAddress !== '') {
-            $this->monitoringService->forceLogoutByIp($ipAddress);
+        if ($ipAddress !== '' && $keepSessionId > 0) {
+            $this->monitoringService->forceLogoutOtherAdminSessionsByIp($ipAddress, $keepSessionId);
         }
 
         $this->redirect(base_url('admin/monitoring'));

@@ -444,4 +444,58 @@ final class MonitoringService
             ['ip_address' => $ipAddress]
         );
     }
+
+    public function forceLogoutAdminSessionsByIp(string $ipAddress): int
+    {
+        $ipAddress = trim($ipAddress);
+
+        if ($ipAddress === '') {
+            return 0;
+        }
+
+        return Database::execute(
+            "
+            UPDATE user_sessions us
+            INNER JOIN users u ON u.id = us.user_id
+            INNER JOIN roles r ON r.id = u.role_id
+            SET
+                us.status = 'closed',
+                us.closed_at = NOW(),
+                us.updated_at = NOW()
+            WHERE us.ip_address = :ip_address
+            AND us.status = 'active'
+            AND r.code = 'admin'
+            ",
+            ['ip_address' => $ipAddress]
+        );
+    }
+
+    public function forceLogoutOtherAdminSessionsByIp(string $ipAddress, int $keepSessionId): int
+    {
+        $ipAddress = trim($ipAddress);
+
+        if ($ipAddress === '' || $keepSessionId <= 0) {
+            return 0;
+        }
+
+        return Database::execute(
+            "
+            UPDATE user_sessions us
+            INNER JOIN users u ON u.id = us.user_id
+            INNER JOIN roles r ON r.id = u.role_id
+            SET
+                us.status = 'closed',
+                us.closed_at = NOW(),
+                us.updated_at = NOW()
+            WHERE us.ip_address = :ip_address
+            AND us.status = 'active'
+            AND r.code = 'admin'
+            AND us.id <> :keep_session_id
+            ",
+            [
+                'ip_address' => $ipAddress,
+                'keep_session_id' => $keepSessionId,
+            ]
+        );
+    }
 }
