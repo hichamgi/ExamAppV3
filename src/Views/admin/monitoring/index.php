@@ -49,32 +49,28 @@
                             <tr>
                                 <td>
                                     <div class="fw-semibold">
-                                        <?= e($session['student_name'] ?? '') ?>
+                                        <?= e($session['display_name'] ?? '') ?>
                                     </div>
-
-                                    <?php if ($isAdmin): ?>
-                                        <div class="small text-primary">Admin</div>
-                                    <?php else: ?>
-                                        <div class="small text-secondary">Élève</div>
-                                    <?php endif; ?>
+                                    <div class="small <?= $isAdmin ? 'text-primary' : 'text-secondary' ?>">
+                                        <?= $isAdmin ? 'Admin' : 'Élève' ?>
+                                    </div>
                                 </td>
-
                                 <td><?= e($session['class_name'] ?? '—') ?></td>
                                 <td><?= e($session['computer_name'] ?? '—') ?></td>
                                 <td><?= e($session['ip_address'] ?? '') ?></td>
                                 <td><?= e($session['last_activity_at'] ?? '') ?></td>
-
                                 <td class="text-end">
                                     <?php if ($isAdmin): ?>
                                         <form method="POST" action="<?= e(base_url('admin/monitoring/force-logout-ip')) ?>" class="d-inline">
                                             <input type="hidden" name="_csrf" value="<?= e($csrf_monitoring_action) ?>">
                                             <input type="hidden" name="ip_address" value="<?= e($session['ip_address'] ?? '') ?>">
+                                            <input type="hidden" name="session_id" value="<?= (int) ($session['session_id'] ?? 0) ?>">
 
                                             <button
                                                 type="submit"
                                                 class="btn btn-sm btn-outline-danger"
                                                 data-bs-toggle="tooltip"
-                                                title="Déconnecter les anciennes sessions admin de cette IP"
+                                                title="Déconnecter les autres sessions admin de cette IP"
                                             >
                                                 <i class="bi bi-router"></i>
                                             </button>
@@ -82,7 +78,7 @@
                                     <?php else: ?>
                                         <form method="POST" action="<?= e(base_url('admin/monitoring/force-logout')) ?>" class="d-inline">
                                             <input type="hidden" name="_csrf" value="<?= e($csrf_monitoring_action) ?>">
-                                            <input type="hidden" name="session_id" value="<?= (int) ($session['id'] ?? 0) ?>">
+                                            <input type="hidden" name="session_id" value="<?= (int) ($session['session_id'] ?? 0) ?>">
 
                                             <button
                                                 type="submit"
