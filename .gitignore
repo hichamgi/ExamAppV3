@@ -1,7 +1,7 @@
 /vendor/
 /.env
 /prompt.md
-/ARCHITECTURE_EXAMAPPV3.md
+/ARCHITECTURE_EXAMAPPV3*.md
 
 /storage/cache/*
 !/storage/cache/.gitkeep
