@@ -72,7 +72,6 @@ ExamAppV3
 │   │   ├── AdminComputerController.php
 │   │   ├── AdminStudentController.php
 │   │   ├── AdminClassController.php
-│   │   ├── AdminAuthorizationController.php
 │   │   ├── AdminExamController.php
 │   │   └── AdminMonitoringController.php
 │
