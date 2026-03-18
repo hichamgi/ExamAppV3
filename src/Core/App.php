@@ -253,7 +253,7 @@ final class App
         $router->post('/admin/classes/deny-login', [AdminClassController::class, 'denyClassLogin']);
         $router->post('/admin/classes/allow-group-login', [AdminClassController::class, 'allowGroupLogin']);
 
-                /*
+        /*
         |--------------------------------------------------------------------------
         | Admin - exams
         |--------------------------------------------------------------------------
@@ -264,6 +264,8 @@ final class App
         $router->post('/admin/exams/toggle-active', [AdminExamController::class, 'toggleActive']);
         $router->post('/admin/exams/toggle-print', [AdminExamController::class, 'togglePrint']);
         $router->post('/admin/exams/save-assignment', [AdminExamController::class, 'saveAssignment']);
+        $router->post('/admin/exams/generate-subjects', [AdminExamController::class, 'generateSubjects']);
+        $router->post('/admin/exams/regenerate-student', [AdminExamController::class, 'regenerateStudentExam']);
 
         $router->get('/admin/exams/{id}', [AdminExamController::class, 'show']);
 

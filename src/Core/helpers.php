@@ -8,11 +8,7 @@ use App\Core\Request;
 if (!function_exists('request')) {
     function request(): Request
     {
-        if (!isset($GLOBALS['app_request']) || !$GLOBALS['app_request'] instanceof Request) {
-            $GLOBALS['app_request'] = new Request();
-        }
-
-        return $GLOBALS['app_request'];
+        return Request::capture();
     }
 }
 

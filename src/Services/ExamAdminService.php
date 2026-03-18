@@ -8,6 +8,8 @@ use RuntimeException;
 class ExamAdminService
 {
     private const CLASS_TYPES = ['TCT', 'TCS', 'TCL'];
+    private const RESET_USER_EXAM_STATUS = 'assigned';
+    private const QUESTION_SNAPSHOT_VERSION = 1;
 
     public function listExams(): array
     {
@@ -237,6 +239,45 @@ class ExamAdminService
             ]
         );
 
+        $answerRows = Database::fetchAll(
+            "
+            SELECT
+                ao.id,
+                ao.question_id,
+                ao.answer_text,
+                ao.is_correct,
+                ao.explanation,
+                ao.sort_order
+            FROM answer_options ao
+            INNER JOIN questions q ON q.id = ao.question_id
+            WHERE q.exam_id = :answers_exam_id
+            ORDER BY ao.question_id ASC, ao.sort_order ASC, ao.id ASC
+            ",
+            [
+                'answers_exam_id' => $examId,
+            ]
+        );
+
+        $answersByQuestionId = [];
+        foreach ($answerRows as $answerRow) {
+            $questionId = (int) ($answerRow['question_id'] ?? 0);
+            if ($questionId <= 0) {
+                continue;
+            }
+
+            if (!isset($answersByQuestionId[$questionId])) {
+                $answersByQuestionId[$questionId] = [];
+            }
+
+            $answersByQuestionId[$questionId][] = [
+                'id' => (int) $answerRow['id'],
+                'answer_text' => (string) ($answerRow['answer_text'] ?? ''),
+                'is_correct' => (bool) ($answerRow['is_correct'] ?? false),
+                'explanation' => (string) ($answerRow['explanation'] ?? ''),
+                'sort_order' => (int) ($answerRow['sort_order'] ?? 0),
+            ];
+        }
+
         $grouped = [];
         foreach ($questionRows as $row) {
             $num = (string) ((int) ($row['num'] ?? 0));
@@ -253,15 +294,18 @@ class ExamAdminService
                 ];
             }
 
+            $questionId = (int) $row['id'];
+
             $grouped[$num]['available_count']++;
             $grouped[$num]['questions'][] = [
-                'id' => (int) $row['id'],
+                'id' => $questionId,
                 'question_text' => (string) ($row['question_text'] ?? ''),
                 'points' => (float) ($row['points'] ?? 0),
                 'type' => (string) ($row['type'] ?? ''),
                 'sort_order' => (int) ($row['sort_order'] ?? 0),
                 'is_required' => (bool) ($row['is_required'] ?? false),
                 'category_id' => isset($row['category_id']) ? (int) $row['category_id'] : null,
+                'answer_options' => $answersByQuestionId[$questionId] ?? [],
             ];
         }
 
@@ -322,16 +366,14 @@ class ExamAdminService
 
         $metadata = $this->decodeMetadata($exam['metadata']);
 
-        $availableRows = Database::fetchAll(
+        $questionRows = Database::fetchAll(
             "
             SELECT
-                q.num,
-                COUNT(*) AS available_count,
-                MAX(q.points) AS point_value
+                q.id,
+                q.num
             FROM questions q
             WHERE q.exam_id = :save_exam_id
-            GROUP BY q.num
-            ORDER BY q.num ASC
+            ORDER BY q.num ASC, q.id ASC
             ",
             [
                 'save_exam_id' => $examId,
@@ -339,16 +381,20 @@ class ExamAdminService
         );
 
         $availableByNum = [];
-        foreach ($availableRows as $row) {
+
+        foreach ($questionRows as $row) {
             $num = (string) ((int) ($row['num'] ?? 0));
             if ($num === '0') {
                 continue;
             }
 
-            $availableByNum[$num] = [
-                'available_count' => (int) ($row['available_count'] ?? 0),
-                'points' => (float) ($row['point_value'] ?? 0),
-            ];
+            if (!isset($availableByNum[$num])) {
+                $availableByNum[$num] = [
+                    'available_count' => 0,
+                ];
+            }
+
+            $availableByNum[$num]['available_count']++;
         }
 
         $assignment = [
@@ -377,6 +423,51 @@ class ExamAdminService
             }
         }
 
+        $groupPointsInput = $input['group_points'] ?? [];
+        if (!is_array($groupPointsInput)) {
+            $groupPointsInput = [];
+        }
+
+        foreach ($groupPointsInput as $numRaw => $pointsRaw) {
+            $num = (int) $numRaw;
+            if ($num <= 0) {
+                continue;
+            }
+
+            $normalized = is_scalar($pointsRaw)
+                ? str_replace(',', '.', trim((string) $pointsRaw))
+                : '';
+
+            if ($normalized === '' || !is_numeric($normalized)) {
+                continue;
+            }
+
+            $points = round((float) $normalized, 2);
+
+            if ($points < 0) {
+                $points = 0;
+            }
+
+            if ($points > 100) {
+                $points = 100;
+            }
+
+            Database::execute(
+                "
+                UPDATE questions
+                SET points = :points_update,
+                    updated_at = NOW()
+                WHERE exam_id = :exam_id_update
+                AND num = :num_update
+                ",
+                [
+                    'points_update' => number_format($points, 2, '.', ''),
+                    'exam_id_update' => $examId,
+                    'num_update' => $num,
+                ]
+            );
+        }
+
         $metadata['question_assignment'] = $this->normalizeAssignment($assignment);
 
         if (!isset($metadata['idmodule']) && isset($metadata['legacy_idmodule'])) {
@@ -386,6 +477,8 @@ class ExamAdminService
         if (!array_key_exists('division_id', $metadata)) {
             $metadata['division_id'] = null;
         }
+
+        $metadata = $this->decodeHtmlEntitiesRecursive($metadata);
 
         Database::execute(
             "
@@ -627,5 +720,558 @@ class ExamAdminService
         }
 
         return $normalized;
+    }
+
+    private function decodeHtmlEntitiesRecursive(array $data): array
+    {
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                $data[$key] = $this->decodeHtmlEntitiesRecursive($value);
+                continue;
+            }
+
+            if (is_string($value)) {
+                $data[$key] = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            }
+        }
+
+        return $data;
+    }
+
+    public function getExamGenerationPanelData(int $examId): array
+    {
+        $summary = Database::fetchOne(
+            "
+            SELECT
+                COUNT(*) AS total_user_exams,
+                SUM(
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM user_answers ua
+                            WHERE ua.user_exam_id = ue.id
+                        ) THEN 1 ELSE 0
+                    END
+                ) AS generated_user_exams
+            FROM user_exams ue
+            INNER JOIN users u ON u.id = ue.user_id
+            WHERE ue.exam_id = :panel_exam_id
+            AND u.is_active = 1
+            AND u.numero > 0
+            ",
+            [
+                'panel_exam_id' => $examId,
+            ]
+        );
+
+        $students = Database::fetchAll(
+            "
+            SELECT
+                ue.id AS user_exam_id,
+                ue.user_id,
+                ue.class_id,
+                ue.status,
+                ue.is_absent,
+                ue.is_retake,
+                ue.is_cheat,
+                u.numero,
+                u.code_massar,
+                u.nom,
+                u.prenom,
+                c.name AS class_name,
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM user_answers ua
+                        WHERE ua.user_exam_id = ue.id
+                    ) THEN 1 ELSE 0
+                END AS has_generated_subject
+            FROM user_exams ue
+            INNER JOIN users u ON u.id = ue.user_id
+            INNER JOIN classes c ON c.id = ue.class_id
+            WHERE ue.exam_id = :panel_students_exam_id
+            AND u.is_active = 1
+            AND u.numero > 0
+            ORDER BY c.name ASC, u.numero ASC, u.nom ASC, u.prenom ASC
+            ",
+            [
+                'panel_students_exam_id' => $examId,
+            ]
+        );
+
+        $classSummaries = Database::fetchAll(
+            "
+            SELECT
+                c.id AS class_id,
+                c.name AS class_name,
+                COUNT(*) AS total_students,
+                SUM(
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM user_answers ua
+                            WHERE ua.user_exam_id = ue.id
+                        ) THEN 1 ELSE 0
+                    END
+                ) AS generated_students
+            FROM user_exams ue
+            INNER JOIN users u ON u.id = ue.user_id
+            INNER JOIN classes c ON c.id = ue.class_id
+            WHERE ue.exam_id = :panel_classes_exam_id
+            AND u.is_active = 1
+            AND u.numero > 0
+            GROUP BY c.id, c.name
+            ORDER BY c.name ASC
+            ",
+            [
+                'panel_classes_exam_id' => $examId,
+            ]
+        );
+
+        $totalUserExams = (int) ($summary['total_user_exams'] ?? 0);
+        $generatedUserExams = (int) ($summary['generated_user_exams'] ?? 0);
+
+        return [
+            'summary' => [
+                'total_user_exams' => $totalUserExams,
+                'generated_user_exams' => $generatedUserExams,
+                'pending_user_exams' => max(0, $totalUserExams - $generatedUserExams),
+            ],
+            'students' => array_map(
+                static fn(array $row): array => [
+                    'user_exam_id' => (int) $row['user_exam_id'],
+                    'user_id' => (int) $row['user_id'],
+                    'class_id' => (int) $row['class_id'],
+                    'class_name' => (string) ($row['class_name'] ?? ''),
+                    'status' => (string) ($row['status'] ?? ''),
+                    'is_absent' => (bool) ($row['is_absent'] ?? false),
+                    'is_retake' => (bool) ($row['is_retake'] ?? false),
+                    'is_cheat' => (bool) ($row['is_cheat'] ?? false),
+                    'numero' => (int) ($row['numero'] ?? 0),
+                    'code_massar' => (string) ($row['code_massar'] ?? ''),
+                    'student_name' => trim(((string) ($row['nom'] ?? '')) . ' ' . ((string) ($row['prenom'] ?? ''))),
+                    'has_generated_subject' => (bool) ($row['has_generated_subject'] ?? false),
+                ],
+                $students
+            ),
+            'classes' => array_map(
+                static fn(array $row): array => [
+                    'class_id' => (int) $row['class_id'],
+                    'class_name' => (string) ($row['class_name'] ?? ''),
+                    'total_students' => (int) ($row['total_students'] ?? 0),
+                    'generated_students' => (int) ($row['generated_students'] ?? 0),
+                    'pending_students' => max(
+                        0,
+                        (int) ($row['total_students'] ?? 0) - (int) ($row['generated_students'] ?? 0)
+                    ),
+                ],
+                $classSummaries
+            ),
+        ];
+    }
+
+    public function generateExamSubjects(int $examId, ?int $classId = null): array
+    {
+        if ($examId <= 0) {
+            throw new RuntimeException('Examen invalide.');
+        }
+
+        $exam = $this->findExamById($examId);
+        if ($exam === null) {
+            throw new RuntimeException('Examen introuvable.');
+        }
+
+        $targets = $this->findTargetUserExamsForGeneration($examId, $classId, true);
+        $poolByNum = $this->getQuestionPoolByNum($examId);
+
+        $stats = [
+            'generated' => 0,
+            'skipped' => 0,
+        ];
+
+        foreach ($targets as $target) {
+            $classType = $this->resolveClassType((string) ($target['class_name'] ?? ''));
+            if ($classType === null) {
+                $stats['skipped']++;
+                continue;
+            }
+
+            $assignment = $this->getAssignmentForClassType($examId, $classType);
+            if ($this->isEmptyAssignment($assignment)) {
+                $stats['skipped']++;
+                continue;
+            }
+
+            Database::transaction(function () use ($target, $assignment, $poolByNum, &$stats): void {
+                $userExamId = (int) $target['user_exam_id'];
+
+                $alreadyGenerated = (int) Database::fetchValue(
+                    "
+                    SELECT COUNT(*)
+                    FROM user_answers ua
+                    WHERE ua.user_exam_id = :check_user_exam_id
+                    ",
+                    [
+                        'check_user_exam_id' => $userExamId,
+                    ],
+                    0
+                );
+
+                if ($alreadyGenerated > 0) {
+                    $stats['skipped']++;
+                    return;
+                }
+
+                $this->generateSubjectRowsForUserExam($userExamId, $assignment, $poolByNum);
+                $stats['generated']++;
+            });
+        }
+
+        return $stats;
+    }
+
+    public function regenerateStudentExam(int $examId, int $userId): void
+    {
+        if ($examId <= 0) {
+            throw new RuntimeException('Examen invalide.');
+        }
+
+        if ($userId <= 0) {
+            throw new RuntimeException('Élève invalide.');
+        }
+
+        $target = Database::fetchOne(
+            "
+            SELECT
+                ue.id AS user_exam_id,
+                ue.user_id,
+                ue.class_id,
+                c.name AS class_name
+            FROM user_exams ue
+            INNER JOIN classes c ON c.id = ue.class_id
+            WHERE ue.exam_id = :regen_exam_id
+            AND ue.user_id = :regen_user_id
+            LIMIT 1
+            ",
+            [
+                'regen_exam_id' => $examId,
+                'regen_user_id' => $userId,
+            ]
+        );
+
+        if ($target === null) {
+            throw new RuntimeException('Affectation examen/élève introuvable.');
+        }
+
+        $classType = $this->resolveClassType((string) ($target['class_name'] ?? ''));
+        if ($classType === null) {
+            throw new RuntimeException('Type de classe non reconnu.');
+        }
+
+        $assignment = $this->getAssignmentForClassType($examId, $classType);
+        if ($this->isEmptyAssignment($assignment)) {
+            throw new RuntimeException('Aucune affectation de questions pour ce type de classe.');
+        }
+
+        $poolByNum = $this->getQuestionPoolByNum($examId);
+        $userExamId = (int) $target['user_exam_id'];
+
+        Database::transaction(function () use ($userExamId, $examId, $assignment, $poolByNum): void {
+            Database::delete('user_answers', 'user_exam_id = :delete_user_exam_id', [
+                'delete_user_exam_id' => $userExamId,
+            ]);
+
+            Database::delete('exam_results', 'user_exam_id = :delete_result_user_exam_id', [
+                'delete_result_user_exam_id' => $userExamId,
+            ]);
+
+            Database::update(
+                'user_exams',
+                [
+                    'is_absent' => 1,
+                    'is_retake' => 1,
+                    'is_cheat' => 0,
+                    'started_at' => null,
+                    'submitted_at' => null,
+                    'duration_seconds' => 0,
+                    'score' => 0,
+                    'status' => self::RESET_USER_EXAM_STATUS,
+                ],
+                'id = :reset_user_exam_id AND exam_id = :reset_exam_id',
+                [
+                    'reset_user_exam_id' => $userExamId,
+                    'reset_exam_id' => $examId,
+                ]
+            );
+
+            $this->generateSubjectRowsForUserExam($userExamId, $assignment, $poolByNum);
+        });
+    }
+
+    private function findTargetUserExamsForGeneration(int $examId, ?int $classId = null, bool $onlyWithoutQuestions = true): array
+    {
+        $where = [
+            'ue.exam_id = :target_exam_id',
+            'u.is_active = :target_user_active',
+            'u.numero > :target_min_numero',
+        ];
+
+        $params = [
+            'target_exam_id' => $examId,
+            'target_user_active' => 1,
+            'target_min_numero' => 0,
+        ];
+
+        if ($classId !== null && $classId > 0) {
+            $where[] = 'ue.class_id = :target_class_id';
+            $params['target_class_id'] = $classId;
+        }
+
+        if ($onlyWithoutQuestions) {
+            $where[] = 'NOT EXISTS (
+                SELECT 1
+                FROM user_answers ua
+                WHERE ua.user_exam_id = ue.id
+            )';
+        }
+
+        return Database::fetchAll(
+            "
+            SELECT
+                ue.id AS user_exam_id,
+                ue.user_id,
+                ue.class_id,
+                c.name AS class_name,
+                u.numero,
+                u.nom,
+                u.prenom
+            FROM user_exams ue
+            INNER JOIN users u ON u.id = ue.user_id
+            INNER JOIN classes c ON c.id = ue.class_id
+            WHERE " . implode(' AND ', $where) . "
+            ORDER BY c.name ASC, u.numero ASC, u.nom ASC, u.prenom ASC
+            ",
+            $params
+        );
+    }
+
+    private function getAssignmentForClassType(int $examId, string $classType): array
+    {
+        $assignmentData = $this->getExamAssignmentData($examId);
+        $assignment = $assignmentData['assignment'][$classType] ?? [];
+
+        return is_array($assignment) ? $assignment : [];
+    }
+
+    private function getQuestionPoolByNum(int $examId): array
+    {
+        $questionRows = Database::fetchAll(
+            "
+            SELECT
+                q.id,
+                q.exam_id,
+                q.category_id,
+                q.question_text,
+                q.points,
+                q.type,
+                q.num,
+                q.is_required,
+                q.sort_order
+            FROM questions q
+            WHERE q.exam_id = :pool_exam_id
+            ORDER BY q.num ASC, q.sort_order ASC, q.id ASC
+            ",
+            [
+                'pool_exam_id' => $examId,
+            ]
+        );
+
+        $answerRows = Database::fetchAll(
+            "
+            SELECT
+                ao.id,
+                ao.question_id,
+                ao.answer_text,
+                ao.is_correct,
+                ao.explanation,
+                ao.sort_order
+            FROM answer_options ao
+            INNER JOIN questions q ON q.id = ao.question_id
+            WHERE q.exam_id = :pool_answers_exam_id
+            ORDER BY ao.question_id ASC, ao.sort_order ASC, ao.id ASC
+            ",
+            [
+                'pool_answers_exam_id' => $examId,
+            ]
+        );
+
+        $answersByQuestionId = [];
+        foreach ($answerRows as $answerRow) {
+            $questionId = (int) ($answerRow['question_id'] ?? 0);
+            if ($questionId <= 0) {
+                continue;
+            }
+
+            $answersByQuestionId[$questionId][] = [
+                'id' => (int) ($answerRow['id'] ?? 0),
+                'answer_text' => (string) ($answerRow['answer_text'] ?? ''),
+                'is_correct' => (bool) ($answerRow['is_correct'] ?? false),
+                'explanation' => (string) ($answerRow['explanation'] ?? ''),
+                'sort_order' => (int) ($answerRow['sort_order'] ?? 0),
+            ];
+        }
+
+        $poolByNum = [];
+
+        foreach ($questionRows as $row) {
+            $num = (int) ($row['num'] ?? 0);
+            if ($num <= 0) {
+                continue;
+            }
+
+            $questionId = (int) ($row['id'] ?? 0);
+
+            $poolByNum[$num][] = [
+                'id' => $questionId,
+                'exam_id' => (int) ($row['exam_id'] ?? 0),
+                'category_id' => isset($row['category_id']) ? (int) $row['category_id'] : null,
+                'question_text' => (string) ($row['question_text'] ?? ''),
+                'points' => (float) ($row['points'] ?? 0),
+                'type' => (string) ($row['type'] ?? ''),
+                'num' => $num,
+                'is_required' => (bool) ($row['is_required'] ?? false),
+                'sort_order' => (int) ($row['sort_order'] ?? 0),
+                'answer_options' => $answersByQuestionId[$questionId] ?? [],
+            ];
+        }
+
+        return $poolByNum;
+    }
+
+    private function generateSubjectRowsForUserExam(int $userExamId, array $assignment, array $poolByNum): void
+    {
+        $selectedQuestions = [];
+        $sortOrder = 1;
+
+        foreach ($assignment as $numRaw => $countRaw) {
+            $num = (int) $numRaw;
+            $count = (int) $countRaw;
+
+            if ($num <= 0 || $count <= 0) {
+                continue;
+            }
+
+            $pool = $poolByNum[$num] ?? [];
+            if (count($pool) < $count) {
+                throw new RuntimeException('Pool insuffisant pour le numéro ' . $num . '.');
+            }
+
+            shuffle($pool);
+            $picked = array_slice($pool, 0, $count);
+
+            usort($picked, static fn(array $a, array $b): int => ((int) $a['id']) <=> ((int) $b['id']));
+
+            foreach ($picked as $question) {
+                $selectedQuestions[] = [
+                    'user_exam_id' => $userExamId,
+                    'question_id' => (int) $question['id'],
+                    'question_num' => (int) $question['num'],
+                    'awarded_points' => 0.00,
+                    'answer_text' => null,
+                    'correct_answer_text' => $this->buildCorrectAnswerText($question),
+                    'question_snapshot' => $this->buildQuestionSnapshot($question, $sortOrder),
+                ];
+
+                $sortOrder++;
+            }
+        }
+
+        usort(
+            $selectedQuestions,
+            static fn(array $a, array $b): int => $a['question_num'] <=> $b['question_num']
+        );
+
+        foreach ($selectedQuestions as $row) {
+            Database::insert('user_answers', $row);
+        }
+    }
+
+    private function buildCorrectAnswerText(array $question): string
+    {
+        $type = strtolower((string) ($question['type'] ?? ''));
+        $options = $question['answer_options'] ?? [];
+
+        if (!is_array($options) || $options === []) {
+            return '';
+        }
+
+        $correct = [];
+        foreach ($options as $option) {
+            if (!empty($option['is_correct'])) {
+                $correct[] = (string) ($option['answer_text'] ?? '');
+            }
+        }
+
+        if ($correct === []) {
+            return '';
+        }
+
+        if (in_array($type, ['list', 'liste', 'qcm', 'checkbox', 'radio'], true)) {
+            return implode(' | ', $correct);
+        }
+
+        return implode(' | ', $correct);
+    }
+
+    private function buildQuestionSnapshot(array $question, int $sortOrder): string
+    {
+        $snapshot = [
+            'version' => self::QUESTION_SNAPSHOT_VERSION,
+            'question_id' => (int) ($question['id'] ?? 0),
+            'exam_id' => (int) ($question['exam_id'] ?? 0),
+            'category_id' => $question['category_id'] ?? null,
+            'num' => (int) ($question['num'] ?? 0),
+            'sort_order' => $sortOrder,
+            'question_text' => (string) ($question['question_text'] ?? ''),
+            'points' => (float) ($question['points'] ?? 0),
+            'type' => (string) ($question['type'] ?? ''),
+            'is_required' => (bool) ($question['is_required'] ?? false),
+            'answer_options' => $question['answer_options'] ?? [],
+        ];
+
+        return json_encode(
+            $snapshot,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+        );
+    }
+
+    private function resolveClassType(string $className): ?string
+    {
+        $name = strtoupper(trim($className));
+
+        if (str_starts_with($name, 'TCT')) {
+            return 'TCT';
+        }
+
+        if (str_starts_with($name, 'TCS')) {
+            return 'TCS';
+        }
+
+        if (str_starts_with($name, 'TCL')) {
+            return 'TCL';
+        }
+
+        return null;
+    }
+
+    private function isEmptyAssignment(array $assignment): bool
+    {
+        foreach ($assignment as $value) {
+            if ((int) $value > 0) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

@@ -48,25 +48,25 @@ class AdminExamController extends Controller
         }
 
         $classId = isset($_GET['class_id']) ? (int) $_GET['class_id'] : 0;
-        $results = $this->examService->getExamResults($examId, $classId > 0 ? $classId : null);
-        $assignmentData = $this->examService->getExamAssignmentData($examId);
 
         $this->render('admin.exams.show', [
             'title' => 'Détail examen',
             'exam' => $exam,
-            'results' => $results,
+            'results' => $this->examService->getExamResults($examId, $classId > 0 ? $classId : null),
             'classes' => $this->classService->listClasses(),
             'selected_class_id' => $classId,
-            'assignment_data' => $assignmentData,
+            'assignment_data' => $this->examService->getExamAssignmentData($examId),
+            'generation_panel' => $this->examService->getExamGenerationPanelData($examId),
             'csrf_exam_toggle' => Csrf::token('admin.exam.toggle'),
             'csrf_exam_assignment' => Csrf::token('admin.exam.assignment'),
+            'csrf_exam_generate' => Csrf::token('admin.exam.generate'),
         ]);
     }
 
     public function toggleActive(): void
     {
         $this->guardAdmin();
-        Csrf::assertRequest(request(), 'admin.exam.toggle');
+        Csrf::assertRequest($this->request(), 'admin.exam.toggle');
 
         $examId = isset($_POST['exam_id']) ? (int) $_POST['exam_id'] : 0;
         $value = isset($_POST['value']) ? (int) $_POST['value'] : 0;
@@ -78,7 +78,7 @@ class AdminExamController extends Controller
     public function togglePrint(): void
     {
         $this->guardAdmin();
-        Csrf::assertRequest(request(), 'admin.exam.toggle');
+        Csrf::assertRequest($this->request(), 'admin.exam.toggle');
 
         $examId = isset($_POST['exam_id']) ? (int) $_POST['exam_id'] : 0;
         $value = isset($_POST['value']) ? (int) $_POST['value'] : 0;
@@ -90,12 +90,41 @@ class AdminExamController extends Controller
     public function saveAssignment(): void
     {
         $this->guardAdmin();
-        Csrf::assertRequest(request(), 'admin.exam.assignment');
+        Csrf::assertRequest($this->request(), 'admin.exam.assignment');
 
         $examId = isset($_POST['exam_id']) ? (int) $_POST['exam_id'] : 0;
 
         $this->examService->saveExamAssignment($examId, $_POST);
+        $this->redirect(base_url('admin/exams/' . $examId));
+    }
 
+    public function generateSubjects(): void
+    {
+        $this->guardAdmin();
+        Csrf::assertRequest($this->request(), 'admin.exam.generate');
+
+        $examId = isset($_POST['exam_id']) ? (int) $_POST['exam_id'] : 0;
+        $classId = isset($_POST['class_id']) ? (int) $_POST['class_id'] : 0;
+
+        $this->examService->generateExamSubjects($examId, $classId > 0 ? $classId : null);
+
+        $redirect = base_url('admin/exams/' . $examId);
+        if ($classId > 0) {
+            $redirect .= '?class_id=' . $classId;
+        }
+
+        $this->redirect($redirect);
+    }
+
+    public function regenerateStudentExam(): void
+    {
+        $this->guardAdmin();
+        Csrf::assertRequest($this->request(), 'admin.exam.generate');
+
+        $examId = isset($_POST['exam_id']) ? (int) $_POST['exam_id'] : 0;
+        $userId = isset($_POST['user_id']) ? (int) $_POST['user_id'] : 0;
+
+        $this->examService->regenerateStudentExam($examId, $userId);
         $this->redirect(base_url('admin/exams/' . $examId));
     }
 

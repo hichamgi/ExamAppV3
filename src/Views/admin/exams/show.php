@@ -8,6 +8,8 @@ declare(strict_types=1);
 /** @var array $assignment_data */
 /** @var string $csrf_exam_toggle */
 /** @var string $csrf_exam_assignment */
+/** @var array $generation_panel */
+/** @var string $csrf_exam_generate */
 
 $metadata = $exam['metadata_array'] ?? [];
 $rows = $assignment_data['rows'] ?? [];
@@ -162,7 +164,7 @@ $resultsCount = count($results);
                             <tr>
                                 <th style="width: 80px;">Num</th>
                                 <th>Questions disponibles</th>
-                                <th style="width: 100px;">Points</th>
+                                <th style="width: 100px;">Pts groupe</th>
                                 <th style="width: 110px;">Nb dispo</th>
                                 <th style="width: 110px;">TCT</th>
                                 <th style="width: 110px;">TCS</th>
@@ -190,14 +192,37 @@ $resultsCount = count($results);
                                             <?php if (!empty($questions)): ?>
                                                 <div class="small">
                                                     <?php foreach ($questions as $index => $question): ?>
-                                                        <div class="<?= $index > 0 ? 'mt-2 pt-2 border-top' : '' ?>">
-                                                            <div class="fw-semibold">
+                                                        <div class="<?= $index > 0 ? 'mt-3 pt-3 border-top' : '' ?>">
+                                                            <div class="fw-semibold mb-1">
                                                                 Q<?= (int) ($question['id'] ?? 0) ?>
                                                                 <?php if (!empty($question['type'])): ?>
                                                                     <span class="text-muted">[<?= e($question['type']) ?>]</span>
                                                                 <?php endif; ?>
+                                                                <?php if (!empty($question['is_required'])): ?>
+                                                                    <span class="badge text-bg-secondary">Obligatoire</span>
+                                                                <?php endif; ?>
                                                             </div>
-                                                            <div><?= e($question['question_text'] ?? '') ?></div>
+
+                                                            <div class="mb-2">
+                                                                <?= e($question['question_text'] ?? '') ?>
+                                                            </div>
+
+                                                            <?php
+                                                            $questionType = strtolower((string) ($question['type'] ?? ''));
+                                                            $answerOptions = $question['answer_options'] ?? [];
+                                                            ?>
+                                                            <?php if (in_array($questionType, ['list', 'lists', 'liste', 'qcm', 'checkbox', 'radio'], true) && !empty($answerOptions)): ?>
+                                                                <ol class="mb-0 ps-3">
+                                                                    <?php foreach ($answerOptions as $option): ?>
+                                                                        <li class="mb-1">
+                                                                            <?= e($option['answer_text'] ?? '') ?>
+                                                                            <?php if (!empty($option['is_correct'])): ?>
+                                                                                <span class="badge text-bg-success">Juste</span>
+                                                                            <?php endif; ?>
+                                                                        </li>
+                                                                    <?php endforeach; ?>
+                                                                </ol>
+                                                            <?php endif; ?>
                                                         </div>
                                                     <?php endforeach; ?>
                                                 </div>
@@ -205,7 +230,18 @@ $resultsCount = count($results);
                                                 <span class="text-muted">—</span>
                                             <?php endif; ?>
                                         </td>
-                                        <td><?= e(number_format((float) ($row['points'] ?? 0), 2, '.', '')) ?></td>
+                                        <td>
+                                            <input
+                                                type="number"
+                                                name="group_points[<?= (int) ($row['num'] ?? 0) ?>]"
+                                                class="form-control form-control-sm"
+                                                min="0"
+                                                max="100"
+                                                step="0.25"
+                                                value="<?= e(number_format((float) ($row['points'] ?? 0), 2, '.', '')) ?>"
+                                                style="width: 90px;"
+                                            >
+                                        </td>
                                         <td><?= $availableCount ?></td>
                                         <td>
                                             <input
@@ -264,6 +300,109 @@ $resultsCount = count($results);
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+    <?php
+    $generationSummary = $generation_panel['summary'] ?? [
+        'total_user_exams' => 0,
+        'generated_user_exams' => 0,
+        'pending_user_exams' => 0,
+    ];
+    $generationStudents = $generation_panel['students'] ?? [];
+    $generationClasses = $generation_panel['classes'] ?? [];
+    ?>
+
+    <div class="card shadow-sm border-0 mb-3">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h2 class="h6 mb-0">Génération des sujets</h2>
+            <span class="badge text-bg-light"><?= (int) ($generationSummary['generated_user_exams'] ?? 0) ?> / <?= (int) ($generationSummary['total_user_exams'] ?? 0) ?> générés</span>
+        </div>
+        <div class="card-body">
+            <div class="row g-2 mb-3">
+                <div class="col-md-4">
+                    <div class="border rounded p-2 text-center">
+                        <div class="small text-muted">Total élèves concernés</div>
+                        <div class="h5 mb-0"><?= (int) ($generationSummary['total_user_exams'] ?? 0) ?></div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="border rounded p-2 text-center">
+                        <div class="small text-muted">Sujets déjà générés</div>
+                        <div class="h5 mb-0"><?= (int) ($generationSummary['generated_user_exams'] ?? 0) ?></div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="border rounded p-2 text-center">
+                        <div class="small text-muted">Reste à générer</div>
+                        <div class="h5 mb-0"><?= (int) ($generationSummary['pending_user_exams'] ?? 0) ?></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-12 col-xl-4">
+                    <form action="<?= e(base_url('admin/exams/generate-subjects')) ?>" method="post" class="border rounded p-3 h-100">
+                        <input type="hidden" name="_csrf" value="<?= e($csrf_exam_generate) ?>">
+                        <input type="hidden" name="exam_id" value="<?= (int) ($exam['id'] ?? 0) ?>">
+                        <div class="fw-semibold mb-2">Génération globale</div>
+                        <div class="small text-muted mb-3">
+                            Génère uniquement pour les élèves qui n’ont encore aucune question attribuée.
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bi bi-magic"></i>
+                            Générer pour tous
+                        </button>
+                    </form>
+                </div>
+
+                <div class="col-12 col-xl-4">
+                    <form action="<?= e(base_url('admin/exams/generate-subjects')) ?>" method="post" class="border rounded p-3 h-100">
+                        <input type="hidden" name="_csrf" value="<?= e($csrf_exam_generate) ?>">
+                        <input type="hidden" name="exam_id" value="<?= (int) ($exam['id'] ?? 0) ?>">
+
+                        <div class="fw-semibold mb-2">Génération par classe</div>
+
+                        <select name="class_id" class="form-select form-select-sm mb-3" required>
+                            <option value="">Choisir une classe</option>
+                            <?php foreach ($generationClasses as $classInfo): ?>
+                                <option value="<?= (int) ($classInfo['class_id'] ?? 0) ?>">
+                                    <?= e($classInfo['class_name'] ?? '') ?>
+                                    (reste <?= (int) ($classInfo['pending_students'] ?? 0) ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+
+                        <button type="submit" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-collection"></i>
+                            Générer classe
+                        </button>
+                    </form>
+                </div>
+
+                <div class="col-12 col-xl-4">
+                    <form action="<?= e(base_url('admin/exams/regenerate-student')) ?>" method="post" class="border rounded p-3 h-100">
+                        <input type="hidden" name="_csrf" value="<?= e($csrf_exam_generate) ?>">
+                        <input type="hidden" name="exam_id" value="<?= (int) ($exam['id'] ?? 0) ?>">
+
+                        <div class="fw-semibold mb-2">Régénération élève</div>
+
+                        <select name="user_id" class="form-select form-select-sm mb-3" required>
+                            <option value="">Choisir un élève</option>
+                            <?php foreach ($generationStudents as $student): ?>
+                                <option value="<?= (int) ($student['user_id'] ?? 0) ?>">
+                                    <?= e(($student['class_name'] ?? '') . ' - ' . ($student['numero'] ?? 0) . ' - ' . ($student['student_name'] ?? '')) ?>
+                                    <?= !empty($student['has_generated_subject']) ? ' [déjà généré]' : ' [pas encore généré]' ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+
+                        <button type="submit" class="btn btn-outline-danger btn-sm">
+                            <i class="bi bi-arrow-repeat"></i>
+                            Régénérer élève
+                        </button>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
 
