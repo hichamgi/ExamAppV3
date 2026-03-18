@@ -740,106 +740,93 @@ class ExamAdminService
 
     public function getExamGenerationPanelData(int $examId): array
     {
-        $summary = Database::fetchOne(
-            "
-            SELECT
-                COUNT(*) AS total_user_exams,
-                SUM(
-                    CASE
-                        WHEN EXISTS (
-                            SELECT 1
-                            FROM user_answers ua
-                            WHERE ua.user_exam_id = ue.id
-                        ) THEN 1 ELSE 0
-                    END
-                ) AS generated_user_exams
-            FROM user_exams ue
-            INNER JOIN users u ON u.id = ue.user_id
-            WHERE ue.exam_id = :panel_exam_id
-            AND u.is_active = 1
-            AND u.numero > 0
-            ",
-            [
-                'panel_exam_id' => $examId,
-            ]
-        );
-
         $students = Database::fetchAll(
             "
             SELECT
-                ue.id AS user_exam_id,
-                ue.user_id,
-                ue.class_id,
-                ue.status,
-                ue.is_absent,
-                ue.is_retake,
-                ue.is_cheat,
+                u.id AS user_id,
+                c.id AS class_id,
+                c.name AS class_name,
                 u.numero,
                 u.code_massar,
                 u.nom,
                 u.prenom,
-                c.name AS class_name,
+                ue.id AS user_exam_id,
+                ue.status,
+                ue.is_absent,
+                ue.is_retake,
+                ue.is_cheat,
                 CASE
-                    WHEN EXISTS (
+                    WHEN ue.id IS NOT NULL AND EXISTS (
                         SELECT 1
                         FROM user_answers ua
                         WHERE ua.user_exam_id = ue.id
                     ) THEN 1 ELSE 0
                 END AS has_generated_subject
-            FROM user_exams ue
-            INNER JOIN users u ON u.id = ue.user_id
-            INNER JOIN classes c ON c.id = ue.class_id
-            WHERE ue.exam_id = :panel_students_exam_id
-            AND u.is_active = 1
-            AND u.numero > 0
+            FROM users u
+            INNER JOIN roles r ON r.id = u.role_id
+            INNER JOIN class_students cs ON cs.user_id = u.id
+            INNER JOIN classes c ON c.id = cs.class_id
+            LEFT JOIN user_exams ue
+                ON ue.user_id = u.id
+            AND ue.exam_id = :panel_exam_id
+            WHERE r.code = :panel_role_code
+            AND u.is_active = :panel_user_active
+            AND u.numero > :panel_min_numero
             ORDER BY c.name ASC, u.numero ASC, u.nom ASC, u.prenom ASC
             ",
             [
-                'panel_students_exam_id' => $examId,
+                'panel_exam_id' => $examId,
+                'panel_role_code' => 'student',
+                'panel_user_active' => 1,
+                'panel_min_numero' => 0,
             ]
         );
 
-        $classSummaries = Database::fetchAll(
-            "
-            SELECT
-                c.id AS class_id,
-                c.name AS class_name,
-                COUNT(*) AS total_students,
-                SUM(
-                    CASE
-                        WHEN EXISTS (
-                            SELECT 1
-                            FROM user_answers ua
-                            WHERE ua.user_exam_id = ue.id
-                        ) THEN 1 ELSE 0
-                    END
-                ) AS generated_students
-            FROM user_exams ue
-            INNER JOIN users u ON u.id = ue.user_id
-            INNER JOIN classes c ON c.id = ue.class_id
-            WHERE ue.exam_id = :panel_classes_exam_id
-            AND u.is_active = 1
-            AND u.numero > 0
-            GROUP BY c.id, c.name
-            ORDER BY c.name ASC
-            ",
-            [
-                'panel_classes_exam_id' => $examId,
-            ]
-        );
+        $classBuckets = [];
+        $generatedCount = 0;
 
-        $totalUserExams = (int) ($summary['total_user_exams'] ?? 0);
-        $generatedUserExams = (int) ($summary['generated_user_exams'] ?? 0);
+        foreach ($students as $student) {
+            $classId = (int) ($student['class_id'] ?? 0);
+            $className = (string) ($student['class_name'] ?? '');
+            $hasGenerated = (bool) ($student['has_generated_subject'] ?? false);
+
+            if (!isset($classBuckets[$classId])) {
+                $classBuckets[$classId] = [
+                    'class_id' => $classId,
+                    'class_name' => $className,
+                    'total_students' => 0,
+                    'generated_students' => 0,
+                ];
+            }
+
+            $classBuckets[$classId]['total_students']++;
+
+            if ($hasGenerated) {
+                $classBuckets[$classId]['generated_students']++;
+                $generatedCount++;
+            }
+        }
+
+        $classSummaries = [];
+        foreach ($classBuckets as $bucket) {
+            $bucket['pending_students'] = max(0, $bucket['total_students'] - $bucket['generated_students']);
+            $classSummaries[] = $bucket;
+        }
+
+        usort(
+            $classSummaries,
+            static fn(array $a, array $b): int => strcmp((string) $a['class_name'], (string) $b['class_name'])
+        );
 
         return [
             'summary' => [
-                'total_user_exams' => $totalUserExams,
-                'generated_user_exams' => $generatedUserExams,
-                'pending_user_exams' => max(0, $totalUserExams - $generatedUserExams),
+                'total_user_exams' => count($students),
+                'generated_user_exams' => $generatedCount,
+                'pending_user_exams' => max(0, count($students) - $generatedCount),
             ],
             'students' => array_map(
                 static fn(array $row): array => [
-                    'user_exam_id' => (int) $row['user_exam_id'],
+                    'user_exam_id' => isset($row['user_exam_id']) ? (int) $row['user_exam_id'] : 0,
                     'user_id' => (int) $row['user_id'],
                     'class_id' => (int) $row['class_id'],
                     'class_name' => (string) ($row['class_name'] ?? ''),
@@ -854,19 +841,7 @@ class ExamAdminService
                 ],
                 $students
             ),
-            'classes' => array_map(
-                static fn(array $row): array => [
-                    'class_id' => (int) $row['class_id'],
-                    'class_name' => (string) ($row['class_name'] ?? ''),
-                    'total_students' => (int) ($row['total_students'] ?? 0),
-                    'generated_students' => (int) ($row['generated_students'] ?? 0),
-                    'pending_students' => max(
-                        0,
-                        (int) ($row['total_students'] ?? 0) - (int) ($row['generated_students'] ?? 0)
-                    ),
-                ],
-                $classSummaries
-            ),
+            'classes' => $classSummaries,
         ];
     }
 
@@ -881,7 +856,7 @@ class ExamAdminService
             throw new RuntimeException('Examen introuvable.');
         }
 
-        $targets = $this->findTargetUserExamsForGeneration($examId, $classId, true);
+        $targets = $this->findEligibleStudentsForGeneration($examId, $classId);
         $poolByNum = $this->getQuestionPoolByNum($examId);
 
         $stats = [
@@ -902,8 +877,11 @@ class ExamAdminService
                 continue;
             }
 
-            Database::transaction(function () use ($target, $assignment, $poolByNum, &$stats): void {
-                $userExamId = (int) $target['user_exam_id'];
+            Database::transaction(function () use ($examId, $target, $assignment, $poolByNum, &$stats): void {
+                $userId = (int) $target['user_id'];
+                $classId = (int) $target['class_id'];
+
+                $userExamId = $this->findOrCreateUserExam($examId, $userId, $classId);
 
                 $alreadyGenerated = (int) Database::fetchValue(
                     "
@@ -928,6 +906,82 @@ class ExamAdminService
         }
 
         return $stats;
+    }
+
+    private function findEligibleStudentsForGeneration(int $examId, ?int $classId = null): array
+    {
+        $where = [
+            "u.is_active = :student_active",
+            "u.numero > :student_min_numero",
+            "r.code = :student_role_code",
+        ];
+
+        $params = [
+            'student_active' => 1,
+            'student_min_numero' => 0,
+            'student_role_code' => 'student',
+        ];
+
+        if ($classId !== null && $classId > 0) {
+            $where[] = "c.id = :student_class_id";
+            $params['student_class_id'] = $classId;
+        }
+
+        return Database::fetchAll(
+            "
+            SELECT
+                u.id AS user_id,
+                c.id AS class_id,
+                c.name AS class_name,
+                u.numero,
+                u.code_massar,
+                u.nom,
+                u.prenom
+            FROM users u
+            INNER JOIN roles r ON r.id = u.role_id
+            INNER JOIN class_students cs ON cs.user_id = u.id
+            INNER JOIN classes c ON c.id = cs.class_id
+            WHERE " . implode(' AND ', $where) . "
+            ORDER BY c.name ASC, u.numero ASC, u.nom ASC, u.prenom ASC
+            ",
+            $params
+        );
+    }
+
+    private function findOrCreateUserExam(int $examId, int $userId, int $classId): int
+    {
+        $existing = Database::fetchOne(
+            "
+            SELECT
+                ue.id
+            FROM user_exams ue
+            WHERE ue.exam_id = :find_exam_id
+            AND ue.user_id = :find_user_id
+            LIMIT 1
+            ",
+            [
+                'find_exam_id' => $examId,
+                'find_user_id' => $userId,
+            ]
+        );
+
+        if ($existing !== null) {
+            return (int) $existing['id'];
+        }
+
+        return (int) Database::insert('user_exams', [
+            'exam_id' => $examId,
+            'user_id' => $userId,
+            'class_id' => $classId,
+            'is_absent' => 1,
+            'is_retake' => 0,
+            'is_cheat' => 0,
+            'started_at' => null,
+            'submitted_at' => null,
+            'duration_seconds' => 0,
+            'score' => 0,
+            'status' => self::RESET_USER_EXAM_STATUS,
+        ]);
     }
 
     public function regenerateStudentExam(int $examId, int $userId): void
@@ -1009,51 +1063,51 @@ class ExamAdminService
     }
 
     private function findTargetUserExamsForGeneration(int $examId, ?int $classId = null, bool $onlyWithoutQuestions = true): array
-    {
-        $where = [
-            'ue.exam_id = :target_exam_id',
-            'u.is_active = :target_user_active',
-            'u.numero > :target_min_numero',
-        ];
+{
+    $where = [
+        'ue.exam_id = :target_exam_id',
+        'u.is_active = :target_user_active',
+        'u.numero > :target_min_numero',
+    ];
 
-        $params = [
-            'target_exam_id' => $examId,
-            'target_user_active' => 1,
-            'target_min_numero' => 0,
-        ];
+    $params = [
+        'target_exam_id' => $examId,
+        'target_user_active' => 1,
+        'target_min_numero' => 0,
+    ];
 
-        if ($classId !== null && $classId > 0) {
-            $where[] = 'ue.class_id = :target_class_id';
-            $params['target_class_id'] = $classId;
-        }
-
-        if ($onlyWithoutQuestions) {
-            $where[] = 'NOT EXISTS (
-                SELECT 1
-                FROM user_answers ua
-                WHERE ua.user_exam_id = ue.id
-            )';
-        }
-
-        return Database::fetchAll(
-            "
-            SELECT
-                ue.id AS user_exam_id,
-                ue.user_id,
-                ue.class_id,
-                c.name AS class_name,
-                u.numero,
-                u.nom,
-                u.prenom
-            FROM user_exams ue
-            INNER JOIN users u ON u.id = ue.user_id
-            INNER JOIN classes c ON c.id = ue.class_id
-            WHERE " . implode(' AND ', $where) . "
-            ORDER BY c.name ASC, u.numero ASC, u.nom ASC, u.prenom ASC
-            ",
-            $params
-        );
+    if ($classId !== null && $classId > 0) {
+        $where[] = 'ue.class_id = :target_class_id';
+        $params['target_class_id'] = $classId;
     }
+
+    if ($onlyWithoutQuestions) {
+        $where[] = 'NOT EXISTS (
+            SELECT 1
+            FROM user_answers ua
+            WHERE ua.user_exam_id = ue.id
+        )';
+    }
+
+    return Database::fetchAll(
+        "
+        SELECT
+            ue.id AS user_exam_id,
+            ue.user_id,
+            ue.class_id,
+            c.name AS class_name,
+            u.numero,
+            u.nom,
+            u.prenom
+        FROM user_exams ue
+        INNER JOIN users u ON u.id = ue.user_id
+        INNER JOIN classes c ON c.id = ue.class_id
+        WHERE " . implode(' AND ', $where) . "
+        ORDER BY c.name ASC, u.numero ASC, u.nom ASC, u.prenom ASC
+        ",
+        $params
+    );
+}
 
     private function getAssignmentForClassType(int $examId, string $classType): array
     {
