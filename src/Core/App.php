@@ -19,6 +19,8 @@ final class App
     {
         $this->bootstrap();
 
+        $GLOBALS['app_request'] = new Request();
+
         try {
             $router = $this->buildRouter();
             $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -251,17 +253,19 @@ final class App
         $router->post('/admin/classes/deny-login', [AdminClassController::class, 'denyClassLogin']);
         $router->post('/admin/classes/allow-group-login', [AdminClassController::class, 'allowGroupLogin']);
 
-        /*
+                /*
         |--------------------------------------------------------------------------
         | Admin - exams
         |--------------------------------------------------------------------------
         */
         $router->get('/admin/exams', [AdminExamController::class, 'index']);
         $router->get('/admin/exams/export-semester', [AdminExamController::class, 'exportSemester']);
-        $router->get('/admin/exams/{id}', [AdminExamController::class, 'show']);
+
         $router->post('/admin/exams/toggle-active', [AdminExamController::class, 'toggleActive']);
         $router->post('/admin/exams/toggle-print', [AdminExamController::class, 'togglePrint']);
         $router->post('/admin/exams/save-assignment', [AdminExamController::class, 'saveAssignment']);
+
+        $router->get('/admin/exams/{id}', [AdminExamController::class, 'show']);
 
         /*
         |--------------------------------------------------------------------------
