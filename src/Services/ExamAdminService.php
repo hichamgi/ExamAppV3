@@ -689,30 +689,35 @@ class ExamAdminService
             throw new RuntimeException('Élève invalide.');
         }
 
-        $target = Database::fetchOne(
+        $student = Database::fetchOne(
             "
             SELECT
-                ue.id AS user_exam_id,
-                ue.user_id,
-                ue.class_id,
+                u.id AS user_id,
+                c.id AS class_id,
                 c.name AS class_name
-            FROM user_exams ue
-            INNER JOIN classes c ON c.id = ue.class_id
-            WHERE ue.exam_id = :regen_exam_id
-              AND ue.user_id = :regen_user_id
+            FROM users u
+            INNER JOIN roles r ON r.id = u.role_id
+            INNER JOIN class_students cs ON cs.user_id = u.id
+            INNER JOIN classes c ON c.id = cs.class_id
+            WHERE u.id = :regen_user_id_lookup
+            AND r.code = :regen_role_code_lookup
+            AND u.is_active = :regen_user_active_lookup
+            AND u.numero > :regen_user_numero_lookup
             LIMIT 1
             ",
             [
-                'regen_exam_id' => $examId,
-                'regen_user_id' => $userId,
+                'regen_user_id_lookup' => $userId,
+                'regen_role_code_lookup' => 'student',
+                'regen_user_active_lookup' => 1,
+                'regen_user_numero_lookup' => 0,
             ]
         );
 
-        if ($target === null) {
-            throw new RuntimeException('Affectation examen/élève introuvable.');
+        if ($student === null) {
+            throw new RuntimeException('Élève introuvable ou inactif.');
         }
 
-        $classType = $this->resolveClassType((string) ($target['class_name'] ?? ''));
+        $classType = $this->resolveClassType((string) ($student['class_name'] ?? ''));
         if ($classType === null) {
             throw new RuntimeException('Type de classe non reconnu.');
         }
@@ -723,9 +728,15 @@ class ExamAdminService
         }
 
         $poolByNum = $this->getQuestionPoolByNum($examId);
-        $userExamId = (int) $target['user_exam_id'];
+        $classId = (int) ($student['class_id'] ?? 0);
 
-        Database::transaction(function () use ($userExamId, $examId, $assignment, $poolByNum, $target): void {
+        if ($classId <= 0) {
+            throw new RuntimeException('Classe élève introuvable.');
+        }
+
+        $userExamId = $this->findOrCreateUserExam($examId, $userId, $classId);
+
+        Database::transaction(function () use ($userExamId, $examId, $assignment, $poolByNum, $student, $userId, $classId): void {
             Database::delete('user_answers', 'user_exam_id = :delete_user_exam_id', [
                 'delete_user_exam_id' => $userExamId,
             ]);
@@ -737,6 +748,7 @@ class ExamAdminService
             Database::update(
                 'user_exams',
                 [
+                    'class_id' => $classId,
                     'is_absent' => 1,
                     'is_retake' => 1,
                     'is_cheat' => 0,
@@ -746,10 +758,11 @@ class ExamAdminService
                     'score' => 0,
                     'status' => self::RESET_USER_EXAM_STATUS,
                 ],
-                'id = :reset_user_exam_id AND exam_id = :reset_exam_id',
+                'id = :reset_user_exam_id AND exam_id = :reset_exam_id AND user_id = :reset_user_id',
                 [
                     'reset_user_exam_id' => $userExamId,
                     'reset_exam_id' => $examId,
+                    'reset_user_id' => $userId,
                 ]
             );
 
@@ -758,9 +771,9 @@ class ExamAdminService
                 $assignment,
                 $poolByNum,
                 [
-                    'class_name' => (string) ($target['class_name'] ?? ''),
-                    'class_id' => (int) ($target['class_id'] ?? 0),
-                    'user_id' => (int) ($target['user_id'] ?? 0),
+                    'class_name' => (string) ($student['class_name'] ?? ''),
+                    'class_id' => $classId,
+                    'user_id' => $userId,
                 ]
             );
         });
