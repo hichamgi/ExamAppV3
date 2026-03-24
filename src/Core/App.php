@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Core;
@@ -18,8 +19,6 @@ final class App
     public function run(): void
     {
         $this->bootstrap();
-
-        $GLOBALS['app_request'] = new Request();
 
         try {
             $router = $this->buildRouter();
@@ -237,10 +236,9 @@ final class App
         $router->get('/admin/students', [AdminStudentController::class, 'index']);
         $router->get('/admin/students/{id}', [AdminStudentController::class, 'show']);
         $router->post('/admin/students/toggle-active', [AdminStudentController::class, 'toggleActive']);
-        //$router->post('/admin/students/toggle-can-login', [AdminStudentController::class, 'toggleCanLogin']);
         $router->post('/admin/students/force-logout', [AdminStudentController::class, 'forceLogout']);
         $router->post('/admin/students/toggle-login', [AdminStudentController::class, 'toggleCanLogin']);
-        
+
         /*
         |--------------------------------------------------------------------------
         | Admin - classes

@@ -6,21 +6,15 @@ declare(strict_types=1);
 /** @var array $classes */
 /** @var int $selected_class_id */
 /** @var array $assignment_data */
+/** @var array $generation_panel */
 /** @var string $csrf_exam_toggle */
 /** @var string $csrf_exam_assignment */
-/** @var array $generation_panel */
 /** @var string $csrf_exam_generate */
 
 $metadata = $exam['metadata_array'] ?? [];
 $rows = $assignment_data['rows'] ?? [];
 $totals = $assignment_data['totals'] ?? ['TCT' => 0, 'TCS' => 0, 'TCL' => 0];
-
-if (!function_exists('e')) {
-    function e(mixed $value): string
-    {
-        return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
-    }
-}
+$resultsCount = count($results);
 
 $moduleLabel = trim((string) ($metadata['module_abrev'] ?? ''));
 if ($moduleLabel !== '' && !empty($metadata['module'])) {
@@ -32,7 +26,26 @@ $typeLabel = (string) ($metadata['type'] ?? '');
 $idModule = $metadata['idmodule'] ?? ($metadata['legacy_idmodule'] ?? null);
 $divisionId = $metadata['division_id'] ?? null;
 
-$resultsCount = count($results);
+$generationSummary = $generation_panel['summary'] ?? [
+    'total_user_exams' => 0,
+    'generated_user_exams' => 0,
+    'pending_user_exams' => 0,
+];
+$generationStudents = $generation_panel['students'] ?? [];
+$generationClasses = $generation_panel['classes'] ?? [];
+
+if (!function_exists('render_admin_question_preview')) {
+    function render_admin_question_preview(string $text, array $metadata = []): string
+    {
+        $renderMode = (string) ($metadata['render_mode'] ?? '');
+
+        if ($renderMode === 'code_path') {
+            return '<pre class="bg-light border rounded p-2 small mb-0">' . e($text) . '</pre>';
+        }
+
+        return nl2br(e($text), false);
+    }
+}
 ?>
 <div class="container-fluid py-3">
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
@@ -141,7 +154,7 @@ $resultsCount = count($results);
                         </div>
                     </div>
                     <div class="mt-3 small text-muted">
-                        Les valeurs représentent la note totale potentielle selon les quantités affectées par numéro.
+                        Les valeurs représentent la note totale potentielle selon les quantités affectées par groupe.
                     </div>
                 </div>
             </div>
@@ -151,7 +164,7 @@ $resultsCount = count($results);
     <div class="card shadow-sm border-0 mb-3">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
             <h2 class="h6 mb-0">Affectation des questions par type de classe</h2>
-            <span class="badge text-bg-light"><?= count($rows) ?> numéros</span>
+            <span class="badge text-bg-light"><?= count($rows) ?> groupes</span>
         </div>
         <div class="card-body">
             <form action="<?= e(base_url('admin/exams/save-assignment')) ?>" method="post">
@@ -162,13 +175,13 @@ $resultsCount = count($results);
                     <table class="table table-bordered table-striped table-sm align-middle mb-3">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 80px;">Num</th>
+                                <th style="width: 80px;">Groupe</th>
                                 <th>Questions disponibles</th>
-                                <th style="width: 100px;">Pts groupe</th>
-                                <th style="width: 110px;">Nb dispo</th>
-                                <th style="width: 110px;">TCT</th>
-                                <th style="width: 110px;">TCS</th>
-                                <th style="width: 110px;">TCL</th>
+                                <th style="width: 120px;">Pts groupe</th>
+                                <th style="width: 100px;">Nb dispo</th>
+                                <th style="width: 100px;">TCT</th>
+                                <th style="width: 100px;">TCS</th>
+                                <th style="width: 100px;">TCL</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -181,13 +194,13 @@ $resultsCount = count($results);
                             <?php else: ?>
                                 <?php foreach ($rows as $row): ?>
                                     <?php
-                                    $num = (int) ($row['num'] ?? 0);
+                                    $groupNum = (int) ($row['group_num'] ?? 0);
                                     $availableCount = (int) ($row['available_count'] ?? 0);
                                     $questions = $row['questions'] ?? [];
                                     $assigned = $row['assigned'] ?? ['TCT' => 0, 'TCS' => 0, 'TCL' => 0];
                                     ?>
                                     <tr>
-                                        <td class="fw-semibold"><?= $num ?></td>
+                                        <td class="fw-semibold"><?= $groupNum ?></td>
                                         <td>
                                             <?php if (!empty($questions)): ?>
                                                 <div class="small">
@@ -204,7 +217,10 @@ $resultsCount = count($results);
                                                             </div>
 
                                                             <div class="mb-2">
-                                                                <?= e($question['question_text'] ?? '') ?>
+                                                                <?= render_admin_question_preview(
+                                                                    (string) ($question['question_text'] ?? ''),
+                                                                    (array) ($question['metadata_array'] ?? [])
+                                                                ) ?>
                                                             </div>
 
                                                             <?php
@@ -215,7 +231,7 @@ $resultsCount = count($results);
                                                                 <ol class="mb-0 ps-3">
                                                                     <?php foreach ($answerOptions as $option): ?>
                                                                         <li class="mb-1">
-                                                                            <?= e($option['answer_text'] ?? '') ?>
+                                                                            <?= nl2br(e((string) ($option['answer_text'] ?? '')), false) ?>
                                                                             <?php if (!empty($option['is_correct'])): ?>
                                                                                 <span class="badge text-bg-success">Juste</span>
                                                                             <?php endif; ?>
@@ -233,7 +249,7 @@ $resultsCount = count($results);
                                         <td>
                                             <input
                                                 type="number"
-                                                name="group_points[<?= (int) ($row['num'] ?? 0) ?>]"
+                                                name="group_points[<?= $groupNum ?>]"
                                                 class="form-control form-control-sm"
                                                 min="0"
                                                 max="100"
@@ -247,7 +263,7 @@ $resultsCount = count($results);
                                             <input
                                                 type="number"
                                                 class="form-control form-control-sm"
-                                                name="assign_TCT_<?= $num ?>"
+                                                name="assign_TCT_<?= $groupNum ?>"
                                                 min="0"
                                                 max="<?= $availableCount ?>"
                                                 step="1"
@@ -258,7 +274,7 @@ $resultsCount = count($results);
                                             <input
                                                 type="number"
                                                 class="form-control form-control-sm"
-                                                name="assign_TCS_<?= $num ?>"
+                                                name="assign_TCS_<?= $groupNum ?>"
                                                 min="0"
                                                 max="<?= $availableCount ?>"
                                                 step="1"
@@ -269,7 +285,7 @@ $resultsCount = count($results);
                                             <input
                                                 type="number"
                                                 class="form-control form-control-sm"
-                                                name="assign_TCL_<?= $num ?>"
+                                                name="assign_TCL_<?= $groupNum ?>"
                                                 min="0"
                                                 max="<?= $availableCount ?>"
                                                 step="1"
@@ -296,26 +312,20 @@ $resultsCount = count($results);
                 <div class="d-flex justify-content-end">
                     <button type="submit" class="btn btn-primary btn-sm">
                         <i class="bi bi-save"></i>
-                        Enregistrer l’affectation
+                        Enregistrer
                     </button>
                 </div>
             </form>
         </div>
     </div>
-    <?php
-    $generationSummary = $generation_panel['summary'] ?? [
-        'total_user_exams' => 0,
-        'generated_user_exams' => 0,
-        'pending_user_exams' => 0,
-    ];
-    $generationStudents = $generation_panel['students'] ?? [];
-    $generationClasses = $generation_panel['classes'] ?? [];
-    ?>
 
     <div class="card shadow-sm border-0 mb-3">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
             <h2 class="h6 mb-0">Génération des sujets</h2>
-            <span class="badge text-bg-light"><?= (int) ($generationSummary['generated_user_exams'] ?? 0) ?> / <?= (int) ($generationSummary['total_user_exams'] ?? 0) ?> générés</span>
+            <span class="badge text-bg-light">
+                <?= (int) ($generationSummary['generated_user_exams'] ?? 0) ?> /
+                <?= (int) ($generationSummary['total_user_exams'] ?? 0) ?> générés
+            </span>
         </div>
         <div class="card-body">
             <div class="row g-2 mb-3">
@@ -344,10 +354,12 @@ $resultsCount = count($results);
                     <form action="<?= e(base_url('admin/exams/generate-subjects')) ?>" method="post" class="border rounded p-3 h-100">
                         <input type="hidden" name="_csrf" value="<?= e($csrf_exam_generate) ?>">
                         <input type="hidden" name="exam_id" value="<?= (int) ($exam['id'] ?? 0) ?>">
+
                         <div class="fw-semibold mb-2">Génération globale</div>
                         <div class="small text-muted mb-3">
                             Génère uniquement pour les élèves qui n’ont encore aucune question attribuée.
                         </div>
+
                         <button type="submit" class="btn btn-primary btn-sm">
                             <i class="bi bi-magic"></i>
                             Générer pour tous
