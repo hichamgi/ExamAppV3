@@ -396,7 +396,7 @@ if (!function_exists('render_admin_question_preview')) {
                         <input type="hidden" name="_csrf" value="<?= e($csrf_exam_generate) ?>">
                         <input type="hidden" name="exam_id" value="<?= (int) ($exam['id'] ?? 0) ?>">
 
-                        <div class="fw-semibold mb-2">Régénération élève</div>
+                        <div class="fw-semibold mb-2">Sujet élève</div>
 
                         <select name="user_id" class="form-select form-select-sm mb-3" required>
                             <option value="">Choisir un élève</option>
@@ -410,7 +410,7 @@ if (!function_exists('render_admin_question_preview')) {
 
                         <button type="submit" class="btn btn-outline-danger btn-sm">
                             <i class="bi bi-arrow-repeat"></i>
-                            Régénérer élève
+                            Forcer sujet
                         </button>
                     </form>
                 </div>
