@@ -898,7 +898,22 @@ class ExamAdminService
             return;
         }
 
-        shuffle($selectedQuestions);
+        usort(
+            $selectedQuestions,
+            static function (array $a, array $b): int {
+                $numCompare = ((int) ($a['num'] ?? 0)) <=> ((int) ($b['num'] ?? 0));
+                if ($numCompare !== 0) {
+                    return $numCompare;
+                }
+
+                $sortCompare = ((int) ($a['sort_order'] ?? 0)) <=> ((int) ($b['sort_order'] ?? 0));
+                if ($sortCompare !== 0) {
+                    return $sortCompare;
+                }
+
+                return ((int) ($a['id'] ?? 0)) <=> ((int) ($b['id'] ?? 0));
+            }
+        );
 
         $displayNumber = 1;
 

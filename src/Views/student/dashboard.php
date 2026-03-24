@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 $student = $student ?? [];
 $network = $network ?? [];
-$activeExam = $active_exam ?? null;
+$activeExams = is_array($active_exams ?? null) ? $active_exams : [];
 $computer = is_array($network['computer'] ?? null) ? $network['computer'] : null;
 ?>
 
@@ -35,7 +35,7 @@ $computer = is_array($network['computer'] ?? null) ? $network['computer'] : null
                 <div class="col-md-6">
                     <div class="info-tile">
                         <div class="info-label">Classe</div>
-                        <div class="info-value"><?= e((string) ($student['class_id'] ?? '')) ?></div>
+                        <div class="info-value"><?= e((string) ($student['class_name'] ?? $student['class_id'] ?? '')) ?></div>
                     </div>
                 </div>
 
@@ -80,17 +80,40 @@ $computer = is_array($network['computer'] ?? null) ? $network['computer'] : null
     <div class="col-lg-8">
         <div class="app-card">
             <div class="card-body">
-                <h2 class="h5 mb-3">Examen actif</h2>
+                <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
+                    <h2 class="h5 mb-0">Examens disponibles</h2>
+                    <span class="badge text-bg-light border">
+                        <?= count($activeExams) ?> examen(s)
+                    </span>
+                </div>
 
-                <?php if (is_array($activeExam)): ?>
-                    <div class="border rounded-4 p-3 bg-light-subtle">
-                        <div class="fw-bold mb-2"><?= e((string) ($activeExam['title'] ?? 'Examen')) ?></div>
-                        <div class="text-secondary small mb-2">Code : <?= e((string) ($activeExam['code'] ?? '')) ?></div>
-                        <div class="text-secondary small mb-3">Durée : <?= e((string) ($activeExam['duration_minutes'] ?? 0)) ?> min</div>
+                <?php if ($activeExams !== []): ?>
+                    <div class="d-grid gap-3">
+                        <?php foreach ($activeExams as $exam): ?>
+                            <div class="border rounded-4 p-3 bg-light-subtle">
+                                <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+                                    <div>
+                                        <div class="fw-bold mb-2"><?= e((string) ($exam['title'] ?? 'Examen')) ?></div>
+                                        <div class="text-secondary small mb-1">
+                                            Code : <?= e((string) ($exam['code'] ?? '')) ?>
+                                        </div>
+                                        <div class="text-secondary small mb-1">
+                                            Durée : <?= e((string) ($exam['duration_minutes'] ?? 0)) ?> min
+                                        </div>
+                                        <div class="text-secondary small">
+                                            Statut :
+                                            <span class="fw-semibold"><?= e((string) ($exam['status'] ?? 'assigned')) ?></span>
+                                        </div>
+                                    </div>
 
-                        <button class="btn btn-danger">
-                            <i class="bi bi-play-circle me-2"></i>Commencer / reprendre
-                        </button>
+                                    <div class="d-flex align-items-center">
+                                        <a href="<?= e(base_url('student/exam?user_exam_id=' . (int) ($exam['user_exam_id'] ?? 0))) ?>" class="btn btn-danger">
+                                            <i class="bi bi-play-circle me-2"></i>Commencer / reprendre
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
                     </div>
                 <?php else: ?>
                     <div class="alert alert-secondary mb-0">

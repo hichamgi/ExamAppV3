@@ -206,6 +206,7 @@ final class App
 
         $router->get('/admin/dashboard', [AdminController::class, 'dashboard']);
         $router->get('/student/dashboard', [StudentController::class, 'dashboard']);
+        $router->get('/student/exam', [StudentController::class, 'exam']);
 
         $router->get('/api/admin/sessions', [AdminController::class, 'activeSessions']);
         $router->get('/api/admin/alerts', [AdminController::class, 'loginAlerts']);
