@@ -31,7 +31,7 @@ $renderQuestionCard = static function (array $question): void {
 
             <div class="mb-4">
                 <div class="fw-semibold mb-2">Énoncé</div>
-                <div class="border rounded-3 bg-light p-3" style="white-space: pre-wrap;"><?= e($questionText) ?></div>
+                <div class="border rounded-3 bg-light p-3" style="white-space: normal;"><?= $questionText ?></div>
             </div>
 
             <?php if ($type === 'lists'): ?>
@@ -80,7 +80,25 @@ $renderQuestionCard = static function (array $question): void {
                 $algo = (string) ($snapshot['algo'] ?? '');
                 $note = (string) ($snapshot['note'] ?? '');
                 $blocks = is_array($snapshot['blocks'] ?? null) ? $snapshot['blocks'] : [];
+                $letters = is_array($snapshot['letters'] ?? null) ? $snapshot['letters'] : [];
+                $choices = is_array($snapshot['choices'] ?? null) ? $snapshot['choices'] : [];
+                $image = (string) ($snapshot['image'] ?? '');
+                $html = (string) ($snapshot['html'] ?? '');
                 ?>
+                <?php if ($image !== ''): ?>
+                    <div class="mb-3">
+                        <div class="fw-semibold mb-2">Schéma</div>
+                        <div class="border rounded-3 bg-light p-3 text-center">
+                            <img
+                                src="<?= e(base_url('assets/img/questions/' . $image)) ?>"
+                                alt="Schéma question <?= $questionNum ?>"
+                                class="img-fluid rounded"
+                                style="max-height: 420px;"
+                            >
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <?php if ($algo !== ''): ?>
                     <div class="mb-3">
                         <div class="fw-semibold mb-2">Algorithme</div>
@@ -103,32 +121,92 @@ $renderQuestionCard = static function (array $question): void {
                     <div class="alert alert-secondary small"><?= e($note) ?></div>
                 <?php endif; ?>
 
-                <div class="row g-3">
+                <?php
+                $existingValues = [];
+                if ($answerText !== '') {
+                    $decodedAnswer = json_decode($answerText, true);
+                    if (is_array($decodedAnswer)) {
+                        $existingValues = $decodedAnswer;
+                    }
+                }
+                ?>
+
+                <?php if ($html !== ''): ?>
                     <?php
-                    $existingValues = [];
-                    if ($answerText !== '') {
-                        $decodedAnswer = json_decode($answerText, true);
-                        if (is_array($decodedAnswer)) {
-                            $existingValues = $decodedAnswer;
+                    for ($i = 0; $i < $inputCount; $i++) {
+                        $fieldId = 'q_' . (int) $question['id'] . '_' . $i;
+                        $fieldValue = (string) ($existingValues[$i] ?? '');
+
+                        $replacement = '<input type="text" class="form-control d-inline-block w-auto mx-1" '
+                            . 'id="' . e($fieldId) . '" '
+                            . 'name="answers_multi[' . (int) $question['id'] . '][' . $i . ']" '
+                            . 'value="' . e($fieldValue) . '" autocomplete="off">';
+
+                        $html = str_replace('[__INPUT_' . ($i + 1) . '__]', $replacement, $html);
+                    }
+
+                    for ($b = 1; $b <= 2; $b++) {
+                        for ($j = 1; $j <= 3; $j++) {
+                            $index = (($b - 1) * 3) + ($j - 1);
+                            $fieldId = 'q_' . (int) $question['id'] . '_b' . $b . '_' . $j;
+                            $fieldValue = (string) ($existingValues[$index] ?? '');
+
+                            $replacement = '<input type="text" class="form-control d-inline-block w-auto mx-1" '
+                                . 'id="' . e($fieldId) . '" '
+                                . 'name="answers_multi[' . (int) $question['id'] . '][' . $index . ']" '
+                                . 'value="' . e($fieldValue) . '" autocomplete="off">';
+
+                            $html = str_replace('[__INPUT_' . $b . '_' . $j . '__]', $replacement, $html);
                         }
                     }
                     ?>
-                    <?php for ($i = 0; $i < $inputCount; $i++): ?>
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold" for="q_<?= (int) $question['id'] ?>_<?= $i ?>">
-                                Réponse <?= $i + 1 ?>
-                            </label>
-                            <input
-                                type="text"
-                                class="form-control"
-                                id="q_<?= (int) $question['id'] ?>_<?= $i ?>"
-                                name="answers_multi[<?= (int) $question['id'] ?>][<?= $i ?>]"
-                                value="<?= e((string) ($existingValues[$i] ?? '')) ?>"
-                                autocomplete="off"
-                            >
-                        </div>
-                    <?php endfor; ?>
-                </div>
+                    <div class="border rounded-3 bg-light p-3" style="white-space: normal;">
+                        <?= $html ?>
+                    </div>
+                <?php else: ?>
+                    <div class="row g-3">
+                        <?php for ($i = 0; $i < $inputCount; $i++): ?>
+                            <?php
+                            $fieldId = 'q_' . (int) $question['id'] . '_' . $i;
+                            $fieldLabel = (string) ($letters[$i] ?? ('Réponse ' . ($i + 1)));
+                            $fieldValue = (string) ($existingValues[$i] ?? '');
+                            ?>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold" for="<?= e($fieldId) ?>">
+                                    <?= e($fieldLabel) ?>
+                                </label>
+
+                                <?php if ($choices !== []): ?>
+                                    <select
+                                        class="form-select"
+                                        id="<?= e($fieldId) ?>"
+                                        name="answers_multi[<?= (int) $question['id'] ?>][<?= $i ?>]"
+                                    >
+                                        <option value="">-- Choisir --</option>
+                                        <?php foreach ($choices as $choice): ?>
+                                            <?php $choiceText = (string) $choice; ?>
+                                            <option
+                                                value="<?= e($choiceText) ?>"
+                                                <?= $fieldValue === $choiceText ? 'selected' : '' ?>
+                                            >
+                                                <?= e($choiceText) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                <?php else: ?>
+                                    <input
+                                        type="text"
+                                        class="form-control"
+                                        id="<?= e($fieldId) ?>"
+                                        name="answers_multi[<?= (int) $question['id'] ?>][<?= $i ?>]"
+                                        value="<?= e($fieldValue) ?>"
+                                        autocomplete="off"
+                                    >
+                                <?php endif; ?>
+                            </div>
+                        <?php endfor; ?>
+                    </div>
+                <?php endif; ?>
 
             <?php elseif ($type === 'textarea'): ?>
                 <?php
@@ -198,6 +276,68 @@ $renderQuestionCard = static function (array $question): void {
                             </label>
                         <?php endforeach; ?>
                     </div>
+                </div>
+
+            <?php elseif ($type === 'cp'): ?>
+                <?php $cpFields = is_array($snapshot['cp_fields'] ?? null) ? $snapshot['cp_fields'] : []; ?>
+                <?php
+                $cpValues = [];
+                if ($answerText !== '') {
+                    $decodedAnswer = json_decode($answerText, true);
+                    if (is_array($decodedAnswer)) {
+                        $cpValues = $decodedAnswer;
+                    }
+                }
+                ?>
+                <div class="alert alert-info">
+                    <strong>NB :</strong> Écrivez seulement les valeurs sans aucune unité.
+                </div>
+
+                <div class="row g-3">
+                    <?php foreach ($cpFields as $index => $field): ?>
+                        <?php
+                        $kind = (string) ($field['kind'] ?? 'text');
+                        $label = (string) ($field['label'] ?? ('Champ ' . ($index + 1)));
+                        $choices = is_array($field['choices'] ?? null) ? $field['choices'] : [];
+                        $fieldId = 'q_' . (int) $question['id'] . '_cp_' . $index;
+                        $fieldValue = (string) ($cpValues[$index] ?? '');
+                        ?>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold" for="<?= e($fieldId) ?>">
+                                <?= e($label) ?>
+                            </label>
+
+                            <?php if ($kind === 'select'): ?>
+                                <select
+                                    class="form-select"
+                                    id="<?= e($fieldId) ?>"
+                                    name="answers_multi[<?= (int) $question['id'] ?>][<?= $index ?>]"
+                                >
+                                    <option value="">-- Choisir --</option>
+                                    <?php foreach ($choices as $choice): ?>
+                                        <?php $choiceText = (string) $choice; ?>
+                                        <option
+                                            value="<?= e($choiceText) ?>"
+                                            <?= $fieldValue === $choiceText ? 'selected' : '' ?>
+                                        >
+                                            <?= e($choiceText) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            <?php else: ?>
+                                <input
+                                    type="number"
+                                    class="form-control"
+                                    id="<?= e($fieldId) ?>"
+                                    name="answers_multi[<?= (int) $question['id'] ?>][<?= $index ?>]"
+                                    value="<?= e($fieldValue) ?>"
+                                    step="any"
+                                    min="0"
+                                    autocomplete="off"
+                                >
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
                 </div>
 
             <?php else: ?>
