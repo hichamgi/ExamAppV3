@@ -302,7 +302,7 @@ $renderQuestionCard = static function (array $question): void {
                         $fieldId = 'q_' . (int) $question['id'] . '_cp_' . $index;
                         $fieldValue = (string) ($cpValues[$index] ?? '');
                         ?>
-                        <div class="col-md-6">
+                        <div class="col-md-12">
                             <label class="form-label fw-semibold" for="<?= e($fieldId) ?>">
                                 <?= e($label) ?>
                             </label>
