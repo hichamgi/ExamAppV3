@@ -97,9 +97,16 @@ $showDebugCorrection = (bool) \App\Core\Config::get('app.exam.debug_student_corr
                                 <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
                                     <div>
                                         <div class="fw-bold mb-2"><?= e((string) ($exam['title'] ?? 'Examen')) ?></div>
-                                        <div class="text-secondary small mb-1">Code : <?= e((string) ($exam['code'] ?? '')) ?></div>
-                                        <div class="text-secondary small mb-1">Durée : <?= e((string) ($exam['duration_minutes'] ?? 0)) ?> min</div>
-                                        <div class="text-secondary small">Statut : <span class="fw-semibold"><?= e((string) ($exam['status'] ?? 'assigned')) ?></span></div>
+                                        <div class="text-secondary small mb-1">
+                                            Code : <?= e((string) ($exam['code'] ?? '')) ?>
+                                        </div>
+                                        <div class="text-secondary small mb-1">
+                                            Durée : <?= e((string) ($exam['duration_minutes'] ?? 0)) ?> min
+                                        </div>
+                                        <div class="text-secondary small">
+                                            Statut :
+                                            <span class="fw-semibold"><?= e((string) ($exam['status'] ?? 'assigned')) ?></span>
+                                        </div>
                                     </div>
 
                                     <div class="d-flex align-items-center">
@@ -200,17 +207,36 @@ $showDebugCorrection = (bool) \App\Core\Config::get('app.exam.debug_student_corr
                                         <tr>
                                             <td><?= (int) ($row['question_num'] ?? 0) ?></td>
                                             <td><?= e((string) ($row['type'] ?? '')) ?></td>
-                                            <td><span class="badge <?= e($badgeClass) ?>"><?= e($state) ?></span></td>
+                                            <td>
+                                                <span class="badge <?= e($badgeClass) ?>">
+                                                    <?= e($state) ?>
+                                                </span>
+                                            </td>
                                             <td style="white-space: pre-wrap;"><?= e((string) ($row['student_answer'] ?? '')) ?></td>
                                             <td style="white-space: pre-wrap;">
                                                 <?= e((string) ($row['expected_answer'] ?? '')) ?>
+
                                                 <?php if (($row['type'] ?? '') === 'cp' && !empty($row['debug_fields']) && is_array($row['debug_fields'])): ?>
                                                     <div class="mt-2 small">
                                                         <?php foreach ($row['debug_fields'] as $fieldDebug): ?>
-                                                            <div class="border rounded p-2 mb-2">
-                                                                <div><strong>Champ :</strong> <?= e((string) ($fieldDebug['field'] ?? '')) ?></div>
-                                                                <div><strong>Valeur :</strong> <?= e((string) ($fieldDebug['actual'] ?? '')) ?></div>
-                                                                <div><strong>Règle :</strong> <?= e(json_encode($fieldDebug['rule'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '') ?></div>
+                                                            <div class="border rounded p-2 mb-2 bg-light">
+                                                                <div>
+                                                                    <strong>Champ :</strong>
+                                                                    <?= e((string) ($fieldDebug['field'] ?? '')) ?>
+                                                                </div>
+
+                                                                <?php if (array_key_exists('actual', $fieldDebug)): ?>
+                                                                    <div>
+                                                                        <strong>Valeur :</strong>
+                                                                        <?= e((string) ($fieldDebug['actual'] ?? '')) ?>
+                                                                    </div>
+                                                                <?php endif; ?>
+
+                                                                <div style="white-space: pre-wrap;">
+                                                                    <strong>Règle :</strong>
+                                                                    <?= e(json_encode($fieldDebug['rule'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '') ?>
+                                                                </div>
+
                                                                 <div>
                                                                     <strong>État :</strong>
                                                                     <?php if (!empty($fieldDebug['ok'])): ?>
@@ -219,7 +245,11 @@ $showDebugCorrection = (bool) \App\Core\Config::get('app.exam.debug_student_corr
                                                                         <span class="badge text-bg-danger">Faux</span>
                                                                     <?php endif; ?>
                                                                 </div>
-                                                                <div><strong>Points :</strong> <?= e(number_format((float) ($fieldDebug['points'] ?? 0), 2, '.', '')) ?></div>
+
+                                                                <div>
+                                                                    <strong>Points :</strong>
+                                                                    <?= e(number_format((float) ($fieldDebug['points'] ?? 0), 2, '.', '')) ?>
+                                                                </div>
                                                             </div>
                                                         <?php endforeach; ?>
                                                     </div>
