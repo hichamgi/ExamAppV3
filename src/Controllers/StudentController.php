@@ -832,13 +832,12 @@ final class StudentController extends Controller
                         $isCorrect = true;
                     }
                 } else {
-                    if ($expected !== '') {
-                        if (mb_strtolower($value) === mb_strtolower($expected)) {
-                            $score = $questionPoints;
-                            $isCorrect = true;
-                        }
+                    if ($expected !== '' && mb_strtolower($value) === mb_strtolower($expected)) {
+                        $score = $questionPoints;
+                        $isCorrect = true;
                     }
                 }
+            }
         } elseif ($type === 'inputs') {
             $values = isset($answersMulti[$userAnswerRowId]) && is_array($answersMulti[$userAnswerRowId])
                 ? array_values(array_map(static fn($v): string => trim((string) $v), $answersMulti[$userAnswerRowId]))
@@ -901,7 +900,7 @@ final class StudentController extends Controller
         return [
             'stored_answer_text' => $storedAnswerText,
             'expected_debug' => $expectedDebug,
-            'debug_fields' => $cpEvaluation['debug_fields'] ?? [],
+            'debug_fields' => $debugFields,
             'score' => round($score, 2),
             'is_answered' => $isAnswered,
             'is_correct' => $isCorrect,
@@ -1215,21 +1214,6 @@ final class StudentController extends Controller
         }
 
         return $value;
-    }
-
-    private function normalizeCpValue(?string $value): float
-    {
-        $value = trim((string) $value);
-
-        if ($value === '') {
-            return 0.0;
-        }
-
-        if (!is_numeric($value)) {
-            return 0.0;
-        }
-
-        return (float) $value;
     }
 
     private function normalizeDbSession(array $row): array

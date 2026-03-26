@@ -227,7 +227,6 @@ final class QuestionRendererService
         $mode = random_int(0, 1);
 
         if ($mode === 0) {
-            // 2 maj + 1 min
             $lowerIndex = random_int(0, 2);
 
             foreach ($letters as $index => $letter) {
@@ -236,7 +235,6 @@ final class QuestionRendererService
                     : strtoupper($letter);
             }
         } else {
-            // 2 min + 1 maj
             $upperIndex = random_int(0, 2);
 
             foreach ($letters as $index => $letter) {
@@ -827,25 +825,6 @@ final class QuestionRendererService
         return $imageSet . '-' . $number . '.' . $extension;
     }
 
-    private function normalizePlaceholders(mixed $value): array
-    {
-        if (!is_array($value)) {
-            return [];
-        }
-
-        $normalized = [];
-
-        foreach ($value as $item) {
-            if (!is_scalar($item)) {
-                continue;
-            }
-
-            $normalized[] = trim((string) $item);
-        }
-
-        return $normalized;
-    }
-
     private function buildCorrectAnswerText(array $snapshot): string
     {
         if (($snapshot['type'] ?? '') === self::TYPE_INPUTS && isset($snapshot['expected']) && is_array($snapshot['expected'])) {
@@ -929,20 +908,24 @@ final class QuestionRendererService
             throw new RuntimeException('Snapshot invalide: variable non résolue détectée.');
         }
 
-        if (preg_match('/\[[^\]]+\]/u', $value) === 1 && !preg_match('/^\[__INPUT_\d+(?:_\d+)?__\]$/u', $value)) {
-            throw new RuntimeException('Snapshot invalide: expression non résolue détectée.');
-        }
+        $cleaned = preg_replace('/\[__INPUT_\d+(?:_\d+)?__\]/u', '', $value) ?? $value;
 
-        if (preg_match('/\[(bloc|algo)\d+\]/iu', $value) === 1) {
+        if (preg_match('/\[(bloc|algo)\d+\]/iu', $cleaned) === 1) {
             throw new RuntimeException('Snapshot invalide: marqueur legacy détecté.');
         }
 
-        if (preg_match('/\[img=.*?\]/iu', $value) === 1) {
+        if (preg_match('/\[img=.*?\]/iu', $cleaned) === 1) {
             throw new RuntimeException('Snapshot invalide: image legacy détectée.');
         }
 
-        if (preg_match('/\[ascii\]/iu', $value) === 1) {
+        if (preg_match('/\[ascii\]/iu', $cleaned) === 1) {
             throw new RuntimeException('Snapshot invalide: ascii legacy détecté.');
+        }
+
+        // On ne bloque plus tous les crochets littéraux.
+        // On bloque seulement les expressions réellement supportées par interpolateExpressions()
+        if (preg_match('/\[(?:\s*k\s*|\s*k\s*\+\s*1\s*|\s*k\s*\+\s*0\.5\s*|\s*2\s*\*\s*k\s*\+\s*1\s*)\]/iu', $cleaned) === 1) {
+            throw new RuntimeException('Snapshot invalide: expression non résolue détectée.');
         }
     }
 

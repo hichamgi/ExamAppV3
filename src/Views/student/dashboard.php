@@ -212,8 +212,8 @@ $showDebugCorrection = (bool) \App\Core\Config::get('app.exam.debug_student_corr
                                                     <?= e($state) ?>
                                                 </span>
                                             </td>
-                                            <td style="white-space: pre-wrap;"><?= e((string) ($row['student_answer'] ?? '')) ?></td>
-                                            <td style="white-space: pre-wrap;">
+                                            <td><?= e((string) ($row['student_answer'] ?? '')) ?></td>
+                                            <td>
                                                 <?= e((string) ($row['expected_answer'] ?? '')) ?>
 
                                                 <?php if (($row['type'] ?? '') === 'cp' && !empty($row['debug_fields']) && is_array($row['debug_fields'])): ?>
