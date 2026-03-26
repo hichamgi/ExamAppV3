@@ -398,6 +398,7 @@ $renderQuestionCard = static function (array $question): void {
 
 <form method="POST" action="<?= e(base_url('student/exam/submit')) ?>">
     <input type="hidden" name="_csrf" value="<?= e((string) ($csrf_exam_submit ?? '')) ?>">
+    <input type="hidden" name="user_exam_id" value="<?= (int) ($activeExam['user_exam_id'] ?? 0) ?>">
 
     <?php if ($questions === []): ?>
         <div class="alert alert-warning">
@@ -409,7 +410,7 @@ $renderQuestionCard = static function (array $question): void {
         <?php endforeach; ?>
 
         <div class="d-flex justify-content-between align-items-center gap-3 mb-5">
-            <a href="<?= e(base_url('student')) ?>" class="btn btn-outline-secondary">
+            <a href="<?= e(base_url('student/dashboard')) ?>" class="btn btn-outline-secondary">
                 <i class="bi bi-arrow-left me-2"></i>Retour
             </a>
 

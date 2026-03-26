@@ -189,12 +189,6 @@ final class App
     {
         $router = new Router();
 
-        /*
-        |--------------------------------------------------------------------------
-        | Routes minimales de base
-        |--------------------------------------------------------------------------
-        */
-
         $router->get('/', function (): void {
             header('Location: ' . $this->baseUrl('/login'));
             exit;
@@ -207,6 +201,7 @@ final class App
         $router->get('/admin/dashboard', [AdminController::class, 'dashboard']);
         $router->get('/student/dashboard', [StudentController::class, 'dashboard']);
         $router->get('/student/exam', [StudentController::class, 'exam']);
+        $router->post('/student/exam/submit', [StudentController::class, 'submitExam']);
 
         $router->get('/api/admin/sessions', [AdminController::class, 'activeSessions']);
         $router->get('/api/admin/alerts', [AdminController::class, 'loginAlerts']);
@@ -216,11 +211,6 @@ final class App
         $router->post('/api/auth/logout', [AuthController::class, 'logout']);
         $router->get('/api/auth/session', [AuthController::class, 'sessionStatus']);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Admin - computers
-        |--------------------------------------------------------------------------
-        */
         $router->get('/admin/computers', [AdminComputerController::class, 'index']);
         $router->get('/admin/computers/create', [AdminComputerController::class, 'create']);
         $router->post('/admin/computers/store', [AdminComputerController::class, 'store']);
@@ -229,22 +219,12 @@ final class App
         $router->post('/admin/computers/delete', [AdminComputerController::class, 'delete']);
         $router->post('/admin/computers/toggle-active', [AdminComputerController::class, 'toggleActive']);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Admin - students
-        |--------------------------------------------------------------------------
-        */
         $router->get('/admin/students', [AdminStudentController::class, 'index']);
         $router->get('/admin/students/{id}', [AdminStudentController::class, 'show']);
         $router->post('/admin/students/toggle-active', [AdminStudentController::class, 'toggleActive']);
         $router->post('/admin/students/force-logout', [AdminStudentController::class, 'forceLogout']);
         $router->post('/admin/students/toggle-login', [AdminStudentController::class, 'toggleCanLogin']);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Admin - classes
-        |--------------------------------------------------------------------------
-        */
         $router->get('/admin/classes', [AdminClassController::class, 'index']);
         $router->get('/admin/classes/{id}', [AdminClassController::class, 'show']);
         $router->post('/admin/classes/toggle-active', [AdminClassController::class, 'toggleActive']);
@@ -252,11 +232,6 @@ final class App
         $router->post('/admin/classes/deny-login', [AdminClassController::class, 'denyClassLogin']);
         $router->post('/admin/classes/allow-group-login', [AdminClassController::class, 'allowGroupLogin']);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Admin - exams
-        |--------------------------------------------------------------------------
-        */
         $router->get('/admin/exams', [AdminExamController::class, 'index']);
         $router->get('/admin/exams/export-semester', [AdminExamController::class, 'exportSemester']);
 
@@ -268,11 +243,6 @@ final class App
 
         $router->get('/admin/exams/{id}', [AdminExamController::class, 'show']);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Admin - monitoring
-        |--------------------------------------------------------------------------
-        */
         $router->get('/admin/monitoring', [AdminMonitoringController::class, 'index']);
         $router->post('/admin/monitoring/force-logout', [AdminMonitoringController::class, 'forceLogout']);
         $router->post('/admin/monitoring/block-student', [AdminMonitoringController::class, 'blockStudent']);

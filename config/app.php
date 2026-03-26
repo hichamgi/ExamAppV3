@@ -20,4 +20,8 @@ return [
         'pdf' => env('PDF_PATH', 'storage/pdf'),
     ],
 
+    'exam' => [
+        'debug_student_correction' => true,
+    ],
+
 ];

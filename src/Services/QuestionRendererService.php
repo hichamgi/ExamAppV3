@@ -32,6 +32,7 @@ final class QuestionRendererService
             'inputs_blocks' => $this->renderInputsBlocks($normalizedQuestion),
             'algo_fill' => $this->renderAlgoFill($normalizedQuestion),
             'code_path' => $this->renderCodePath($normalizedQuestion),
+            'rom_types_input' => $this->renderRomTypesInput($normalizedQuestion),
             default => $this->renderStatic($normalizedQuestion),
         };
 
@@ -41,6 +42,35 @@ final class QuestionRendererService
             'snapshot' => $payload,
             'snapshot_json' => $this->encodeSnapshot($payload),
             'correct_answer_text' => $this->buildCorrectAnswerText($payload),
+        ];
+    }
+
+    private function renderRomTypesInput(array $question): array
+    {
+        $metadata = $question['metadata'];
+
+        $expectedItems = isset($metadata['expected_items']) && is_array($metadata['expected_items'])
+            ? array_values(array_filter(
+                array_map(fn($item): string => $this->normalizeString($item), $metadata['expected_items']),
+                fn(string $item): bool => $item !== ''
+            ))
+            : [];
+
+        if ($expectedItems === []) {
+            throw new RuntimeException('rom_types_input: expected_items manquant ou vide.');
+        }
+
+        $pointsPerItem = (float) ($metadata['points_per_item'] ?? 5);
+        $maxScore = (float) ($metadata['max_score'] ?? 20);
+
+        return [
+            'q' => $question['question_text'],
+            'type' => self::TYPE_INPUT,
+            'expected_items' => $expectedItems,
+            'correction_mode' => 'item_list_flexible',
+            'points_per_item' => $pointsPerItem,
+            'max_score' => $maxScore,
+            'options' => [],
         ];
     }
 
@@ -105,8 +135,11 @@ final class QuestionRendererService
 
     private function renderAsciiFromClassName(array $question, array $context): array
     {
-        $className = trim((string) ($context['class_name'] ?? ''));
-        $binary = $this->stringToBinary($className);
+        $sourceText = $this->buildAsciiSourceTextFromClassName(
+            (string) ($context['class_name'] ?? '')
+        );
+
+        $binary = $this->stringToBinary($sourceText);
 
         $questionText = trim($question['question_text']);
         if ($binary !== '') {
@@ -116,8 +149,71 @@ final class QuestionRendererService
         return [
             'q' => $questionText,
             'type' => self::TYPE_INPUT,
+            'expected_text' => $sourceText,
+            'correction_mode' => 'per_character_position',
+            'points_per_char' => 1,
             'options' => [],
         ];
+    }
+
+    private function buildAsciiSourceTextFromClassName(string $className): string
+    {
+        $normalized = strtoupper(trim($className));
+        $prefix = $this->resolveAsciiPrefixFromClassName($normalized);
+        $styledPrefix = $this->randomizeAsciiPrefixCase($prefix);
+        $digit = (string) random_int(1, 9);
+
+        return $styledPrefix . ' ' . $digit;
+    }
+
+    private function resolveAsciiPrefixFromClassName(string $className): string
+    {
+        if (str_starts_with($className, 'TCT')) {
+            return 'tct';
+        }
+
+        if (str_starts_with($className, 'TCSF') || str_starts_with($className, 'TCS')) {
+            return 'tcs';
+        }
+
+        if (str_starts_with($className, 'TCLSHF') || str_starts_with($className, 'TCL')) {
+            return 'tcl';
+        }
+
+        throw new RuntimeException('Type de classe non supporté pour ascii_from_class_name.');
+    }
+
+    private function randomizeAsciiPrefixCase(string $prefix): string
+    {
+        $letters = str_split(strtolower($prefix));
+
+        if (count($letters) !== 3) {
+            throw new RuntimeException('Préfixe ASCII invalide.');
+        }
+
+        $mode = random_int(0, 1);
+
+        if ($mode === 0) {
+            // 2 maj + 1 min
+            $lowerIndex = random_int(0, 2);
+
+            foreach ($letters as $index => $letter) {
+                $letters[$index] = ($index === $lowerIndex)
+                    ? strtolower($letter)
+                    : strtoupper($letter);
+            }
+        } else {
+            // 2 min + 1 maj
+            $upperIndex = random_int(0, 2);
+
+            foreach ($letters as $index => $letter) {
+                $letters[$index] = ($index === $upperIndex)
+                    ? strtoupper($letter)
+                    : strtolower($letter);
+            }
+        }
+
+        return implode('', $letters);
     }
 
     private function renderSchemaImage(array $question): array
