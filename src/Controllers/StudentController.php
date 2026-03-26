@@ -257,6 +257,7 @@ final class StudentController extends Controller
                     'question_text' => (string) ($snapshot['q'] ?? ''),
                     'student_answer' => (string) $evaluation['stored_answer_text'],
                     'expected_answer' => (string) $evaluation['expected_debug'],
+                    'debug_fields' => $evaluation['debug_fields'] ?? [],
                     'score' => (float) $evaluation['score'],
                     'is_answered' => (bool) $evaluation['is_answered'],
                     'is_correct' => (bool) $evaluation['is_correct'],
@@ -694,6 +695,7 @@ final class StudentController extends Controller
         array $answers,
         array $answersMulti
     ): array {
+        $debugFields = [];
         $storedAnswerText = '';
         $score = 0.0;
         $isAnswered = false;
@@ -761,16 +763,20 @@ final class StudentController extends Controller
                     $score = $good * $pointsPerChar;
                     $isCorrect = ($value === $expected);
                 } elseif ($correctionMode === 'item_list_flexible') {
+                    $caseSensitive = (bool) ($snapshot['case_sensitive'] ?? false);
+                    $deduplicate = (bool) ($snapshot['deduplicate'] ?? true);
+                    $correctionPolicy = (string) ($snapshot['correction_policy'] ?? 'lenient');
+
                     $expectedItems = isset($snapshot['expected_items']) && is_array($snapshot['expected_items'])
                         ? array_values(array_filter(array_map(
-                            fn($item): string => $this->normalizeCorrectionItem((string) $item),
+                            fn($item): string => $this->normalizeCorrectionItem((string) $item, $caseSensitive),
                             $snapshot['expected_items']
                         )))
                         : [];
 
                     $expectedDebug = json_encode($expectedItems, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
 
-                    $studentItems = $this->splitFlexibleAnswerItems($value);
+                    $studentItems = $this->splitFlexibleAnswerItems($value, $caseSensitive, $deduplicate);
 
                     $pointsPerItem = (float) ($snapshot['points_per_item'] ?? 5);
                     $maxScore = (float) ($snapshot['max_score'] ?? 20);
@@ -793,7 +799,12 @@ final class StudentController extends Controller
                     }
 
                     $score = min($good * $pointsPerItem, $maxScore);
-                    $isCorrect = ($good >= min(count($expectedItems), (int) floor($maxScore / max($pointsPerItem, 1))));
+
+                    if ($correctionPolicy === 'strict') {
+                        $isCorrect = ($good === count($expectedItems) && count($expectedItems) > 0);
+                    } else {
+                        $isCorrect = ($good >= min(count($expectedItems), (int) floor($maxScore / max($pointsPerItem, 1))));
+                    }
                 } else {
                     if ($expected !== '') {
                         if (mb_strtolower($value) === mb_strtolower($expected)) {
@@ -840,27 +851,319 @@ final class StudentController extends Controller
             $score = 0.0;
             $isCorrect = false;
         } elseif ($type === 'cp') {
-            $values = isset($answersMulti[$userAnswerRowId]) && is_array($answersMulti[$userAnswerRowId])
-                ? array_values(array_map(static fn($v): string => trim((string) $v), $answersMulti[$userAnswerRowId]))
+            $rawValues = isset($answersMulti[$userAnswerRowId]) && is_array($answersMulti[$userAnswerRowId])
+                ? array_values($answersMulti[$userAnswerRowId])
                 : [];
 
-            $storedAnswerText = json_encode($values, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
-            $isAnswered = count(array_filter($values, static fn(string $v): bool => $v !== '')) > 0;
-            $expectedDebug = 'Correction manuelle';
-            $score = 0.0;
-            $isCorrect = false;
+            $storedAnswerText = json_encode($rawValues, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+            $isAnswered = count(array_filter(
+                array_map(static fn($v): string => trim((string) $v), $rawValues),
+                static fn(string $v): bool => $v !== ''
+            )) > 0;
+
+            $cpEvaluation = $this->evaluateCpAnswer($rawValues, $snapshot);
+
+            $expectedDebug = json_encode(
+                $cpEvaluation['debug_expected'],
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            ) ?: '';
+
+            $score = $cpEvaluation['score'];
+            $isCorrect = $cpEvaluation['is_correct'];
+            $debugFields = $cpEvaluation['debug_fields'] ?? [];
         }
 
         return [
             'stored_answer_text' => $storedAnswerText,
             'expected_debug' => $expectedDebug,
+            'debug_fields' => $cpEvaluation['debug_fields'] ?? [],
             'score' => round($score, 2),
             'is_answered' => $isAnswered,
             'is_correct' => $isCorrect,
         ];
     }
 
-    private function splitFlexibleAnswerItems(string $value): array
+    private function evaluateCpAnswer(array $rawValues, array $snapshot): array
+    {
+        $fields = isset($snapshot['cp_fields']) && is_array($snapshot['cp_fields'])
+            ? array_values($snapshot['cp_fields'])
+            : [];
+
+        $rulesByTopology = isset($snapshot['cp_rules']) && is_array($snapshot['cp_rules'])
+            ? $snapshot['cp_rules']
+            : [];
+
+        $blankNumericAsZero = (bool) ($snapshot['blank_numeric_as_zero'] ?? true);
+        $maxScore = (float) ($snapshot['max_score'] ?? 20);
+
+        $normalized = [];
+        foreach ($fields as $index => $field) {
+            $key = (string) ($field['key'] ?? ('field_' . $index));
+            $kind = (string) ($field['kind'] ?? 'number');
+            $raw = isset($rawValues[$index]) ? (string) $rawValues[$index] : '';
+
+            if ($kind === 'select') {
+                $normalized[$key] = trim($raw);
+            } else {
+                $normalized[$key] = $this->normalizeCpNumericValue($raw, $blankNumericAsZero);
+            }
+        }
+
+        $topology = (string) ($normalized['topology'] ?? '');
+        if ($topology === '' || !isset($rulesByTopology[$topology]) || !is_array($rulesByTopology[$topology])) {
+            return [
+                'score' => 0.0,
+                'is_correct' => false,
+                'debug_expected' => ['topology' => 'Bus | Etoile | Anneau'],
+                'debug_fields' => [],
+            ];
+        }
+
+        $topologyRules = $rulesByTopology[$topology];
+        $score = 0.0;
+        $debugExpected = ['topology' => $topology];
+        $debugFields = [];
+        $fieldsCorrect = true;
+
+        foreach ($topologyRules as $fieldKey => $rule) {
+            if ($fieldKey === 'constraints') {
+                continue;
+            }
+
+            if (!is_array($rule)) {
+                continue;
+            }
+
+            $actualValue = (float) ($normalized[$fieldKey] ?? 0);
+            $points = (float) ($rule['points'] ?? 0);
+            $mode = (string) ($rule['mode'] ?? '');
+
+            $ok = $this->isCpRuleSatisfied($mode, $actualValue, $rule);
+
+            $debugExpected[$fieldKey] = $rule;
+            $debugFields[] = [
+                'field' => $fieldKey,
+                'actual' => $actualValue,
+                'rule' => $rule,
+                'ok' => $ok,
+                'points' => $ok ? $points : 0.0,
+            ];
+
+            if ($ok) {
+                $score += $points;
+            } else {
+                $fieldsCorrect = false;
+            }
+        }
+
+        if (isset($topologyRules['constraints']) && is_array($topologyRules['constraints'])) {
+            foreach ($topologyRules['constraints'] as $constraint) {
+                if (!is_array($constraint)) {
+                    continue;
+                }
+
+                $ok = $this->isCpConstraintSatisfied($constraint, $normalized);
+
+                $debugFields[] = [
+                    'field' => 'constraint',
+                    'actual' => null,
+                    'rule' => $constraint,
+                    'ok' => $ok,
+                    'points' => 0.0,
+                ];
+
+                if (!$ok) {
+                    $fieldsCorrect = false;
+                }
+            }
+        }
+
+        $finalScore = round(min($score, $maxScore), 2);
+
+        return [
+            'score' => $finalScore,
+            'is_correct' => $fieldsCorrect && $finalScore >= $maxScore,
+            'debug_expected' => $debugExpected,
+            'debug_fields' => $debugFields,
+        ];
+    }
+
+    private function normalizeCpNumericValue(string $value, bool $blankAsZero = true): float
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return $blankAsZero ? 0.0 : -INF;
+        }
+
+        if (!is_numeric($value)) {
+            return 0.0;
+        }
+
+        return (float) $value;
+    }
+
+    private function isCpRuleSatisfied(string $mode, float $actualValue, array $rule): bool
+    {
+        return match ($mode) {
+            'zero_or_blank' => abs($actualValue) < 0.00001,
+            'equals' => abs($actualValue - (float) ($rule['value'] ?? 0)) < 0.00001,
+            'range' => $actualValue >= (float) ($rule['min'] ?? 0)
+                && $actualValue <= (float) ($rule['max'] ?? 0),
+            'min' => $actualValue >= (float) ($rule['value'] ?? 0),
+            default => false,
+        };
+    }
+
+    private function isCpConstraintSatisfied(array $constraint, array $normalized): bool
+    {
+        $mode = (string) ($constraint['mode'] ?? '');
+
+        if ($mode === 'sum_min') {
+            $fields = isset($constraint['fields']) && is_array($constraint['fields'])
+                ? $constraint['fields']
+                : [];
+
+            $sum = 0.0;
+            foreach ($fields as $field) {
+                $sum += (float) ($normalized[(string) $field] ?? 0);
+            }
+
+            return $sum >= (float) ($constraint['value'] ?? 0);
+        }
+
+        return true;
+    }
+
+    private function evaluateCpAnswer(array $rawValues, array $snapshot): array
+    {
+        $fields = isset($snapshot['cp_fields']) && is_array($snapshot['cp_fields'])
+            ? array_values($snapshot['cp_fields'])
+            : [];
+
+        $rulesByTopology = isset($snapshot['cp_rules']) && is_array($snapshot['cp_rules'])
+            ? $snapshot['cp_rules']
+            : [];
+
+        $blankNumericAsZero = (bool) ($snapshot['blank_numeric_as_zero'] ?? true);
+        $maxScore = (float) ($snapshot['max_score'] ?? 20);
+
+        $normalized = [];
+        foreach ($fields as $index => $field) {
+            $key = (string) ($field['key'] ?? ('field_' . $index));
+            $kind = (string) ($field['kind'] ?? 'number');
+            $raw = isset($rawValues[$index]) ? (string) $rawValues[$index] : '';
+
+            if ($kind === 'select') {
+                $normalized[$key] = trim($raw);
+            } else {
+                $normalized[$key] = $this->normalizeCpNumericValue($raw, $blankNumericAsZero);
+            }
+        }
+
+        $topology = (string) ($normalized['topology'] ?? '');
+        if ($topology === '' || !isset($rulesByTopology[$topology]) || !is_array($rulesByTopology[$topology])) {
+            return [
+                'score' => 0.0,
+                'is_correct' => false,
+                'debug_expected' => ['topology' => 'Bus | Etoile | Anneau'],
+            ];
+        }
+
+        $topologyRules = $rulesByTopology[$topology];
+        $score = 0.0;
+        $debugExpected = ['topology' => $topology];
+        $fieldsCorrect = true;
+
+        foreach ($topologyRules as $fieldKey => $rule) {
+            if ($fieldKey === 'constraints') {
+                continue;
+            }
+
+            if (!is_array($rule)) {
+                continue;
+            }
+
+            $actualValue = (float) ($normalized[$fieldKey] ?? 0);
+            $points = (float) ($rule['points'] ?? 0);
+            $mode = (string) ($rule['mode'] ?? '');
+
+            $debugExpected[$fieldKey] = $rule;
+
+            if ($this->isCpRuleSatisfied($mode, $actualValue, $rule)) {
+                $score += $points;
+            } else {
+                $fieldsCorrect = false;
+            }
+        }
+
+        if (isset($topologyRules['constraints']) && is_array($topologyRules['constraints'])) {
+            foreach ($topologyRules['constraints'] as $constraint) {
+                if (!is_array($constraint)) {
+                    continue;
+                }
+
+                if (!$this->isCpConstraintSatisfied($constraint, $normalized)) {
+                    $fieldsCorrect = false;
+                }
+            }
+        }
+
+        return [
+            'score' => round(min($score, $maxScore), 2),
+            'is_correct' => $fieldsCorrect && round(min($score, $maxScore), 2) >= $maxScore,
+            'debug_expected' => $debugExpected,
+        ];
+    }
+
+    private function normalizeCpNumericValue(string $value, bool $blankAsZero = true): float
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return $blankAsZero ? 0.0 : -INF;
+        }
+
+        if (!is_numeric($value)) {
+            return 0.0;
+        }
+
+        return (float) $value;
+    }
+
+    private function isCpRuleSatisfied(string $mode, float $actualValue, array $rule): bool
+    {
+        return match ($mode) {
+            'zero_or_blank' => abs($actualValue) < 0.00001,
+            'equals' => abs($actualValue - (float) ($rule['value'] ?? 0)) < 0.00001,
+            'range' => $actualValue >= (float) ($rule['min'] ?? 0)
+                && $actualValue <= (float) ($rule['max'] ?? 0),
+            'min' => $actualValue >= (float) ($rule['value'] ?? 0),
+            default => false,
+        };
+    }
+
+    private function isCpConstraintSatisfied(array $constraint, array $normalized): bool
+    {
+        $mode = (string) ($constraint['mode'] ?? '');
+
+        if ($mode === 'sum_min') {
+            $fields = isset($constraint['fields']) && is_array($constraint['fields'])
+                ? $constraint['fields']
+                : [];
+
+            $sum = 0.0;
+            foreach ($fields as $field) {
+                $sum += (float) ($normalized[(string) $field] ?? 0);
+            }
+
+            return $sum >= (float) ($constraint['value'] ?? 0);
+        }
+
+        return true;
+    }
+
+    private function splitFlexibleAnswerItems(string $value, bool $caseSensitive = false, bool $deduplicate = true): array
     {
         $normalized = str_replace(
             ["\r", "\n", "\t", ';', '|', '/', '\\', '-', '_'],
@@ -884,22 +1187,44 @@ final class StudentController extends Controller
         $items = [];
 
         foreach ($parts as $part) {
-            $item = $this->normalizeCorrectionItem($part);
+            $item = $this->normalizeCorrectionItem($part, $caseSensitive);
             if ($item !== '') {
                 $items[] = $item;
             }
         }
 
-        return array_values(array_unique($items));
+        if ($deduplicate) {
+            $items = array_values(array_unique($items));
+        }
+
+        return $items;
     }
 
-    private function normalizeCorrectionItem(string $value): string
+    private function normalizeCorrectionItem(string $value, bool $caseSensitive = false): string
     {
         $value = trim($value);
         $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
-        $value = mb_strtolower($value);
+
+        if (!$caseSensitive) {
+            $value = mb_strtolower($value);
+        }
 
         return $value;
+    }
+
+    private function normalizeCpValue(?string $value): float
+    {
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return 0.0;
+        }
+
+        if (!is_numeric($value)) {
+            return 0.0;
+        }
+
+        return (float) $value;
     }
 
     private function normalizeDbSession(array $row): array

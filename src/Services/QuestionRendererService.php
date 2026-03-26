@@ -62,6 +62,9 @@ final class QuestionRendererService
 
         $pointsPerItem = (float) ($metadata['points_per_item'] ?? 5);
         $maxScore = (float) ($metadata['max_score'] ?? 20);
+        $correctionPolicy = $this->normalizeString($metadata['correction_policy'] ?? 'lenient');
+        $caseSensitive = (bool) ($metadata['case_sensitive'] ?? false);
+        $deduplicate = (bool) ($metadata['deduplicate'] ?? true);
 
         return [
             'q' => $question['question_text'],
@@ -70,6 +73,9 @@ final class QuestionRendererService
             'correction_mode' => 'item_list_flexible',
             'points_per_item' => $pointsPerItem,
             'max_score' => $maxScore,
+            'correction_policy' => $correctionPolicy !== '' ? $correctionPolicy : 'lenient',
+            'case_sensitive' => $caseSensitive,
+            'deduplicate' => $deduplicate,
             'options' => [],
         ];
     }
@@ -355,48 +361,70 @@ final class QuestionRendererService
 
     private function renderCpQuestion(array $question): array
     {
-        return [
-            'q' => $question['question_text'],
-            'type' => self::TYPE_CP,
-            'cp_fields' => [
+        $metadata = $question['metadata'];
+
+        $cpFields = isset($metadata['cp_fields']) && is_array($metadata['cp_fields'])
+            ? array_values($metadata['cp_fields'])
+            : [
                 [
+                    'key' => 'topology',
                     'kind' => 'select',
                     'label' => 'Topologie',
                     'choices' => ['Bus', 'Etoile', 'Anneau'],
                 ],
                 [
+                    'key' => 'twisted_pair',
                     'kind' => 'number',
                     'label' => 'Longueur de la paire torsadée en m',
                 ],
                 [
+                    'key' => 'coax',
                     'kind' => 'number',
                     'label' => 'Longueur du câble coaxial en m',
                 ],
                 [
+                    'key' => 'rj45',
                     'kind' => 'number',
                     'label' => 'Nombre de RJ45',
                 ],
                 [
+                    'key' => 'bnc',
                     'kind' => 'number',
                     'label' => 'Nombre de BNC',
                 ],
                 [
+                    'key' => 'hub',
                     'kind' => 'number',
                     'label' => 'Nombre de Hub',
                 ],
                 [
+                    'key' => 'switch',
                     'kind' => 'number',
                     'label' => 'Nombre de Switch',
                 ],
                 [
+                    'key' => 't_connector',
                     'kind' => 'number',
                     'label' => 'Nombre de Connecteur en T',
                 ],
                 [
+                    'key' => 'terminator',
                     'kind' => 'number',
                     'label' => 'Nombre de Bouchon',
                 ],
-            ],
+            ];
+
+        $cpRules = isset($metadata['cp_rules']) && is_array($metadata['cp_rules'])
+            ? $metadata['cp_rules']
+            : [];
+
+        return [
+            'q' => $question['question_text'],
+            'type' => self::TYPE_CP,
+            'cp_fields' => $cpFields,
+            'cp_rules' => $cpRules,
+            'blank_numeric_as_zero' => (bool) ($metadata['blank_numeric_as_zero'] ?? true),
+            'max_score' => (float) ($metadata['max_score'] ?? 20),
             'options' => [],
         ];
     }

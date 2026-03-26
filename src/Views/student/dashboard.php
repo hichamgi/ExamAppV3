@@ -202,7 +202,29 @@ $showDebugCorrection = (bool) \App\Core\Config::get('app.exam.debug_student_corr
                                             <td><?= e((string) ($row['type'] ?? '')) ?></td>
                                             <td><span class="badge <?= e($badgeClass) ?>"><?= e($state) ?></span></td>
                                             <td style="white-space: pre-wrap;"><?= e((string) ($row['student_answer'] ?? '')) ?></td>
-                                            <td style="white-space: pre-wrap;"><?= e((string) ($row['expected_answer'] ?? '')) ?></td>
+                                            <td style="white-space: pre-wrap;">
+                                                <?= e((string) ($row['expected_answer'] ?? '')) ?>
+                                                <?php if (($row['type'] ?? '') === 'cp' && !empty($row['debug_fields']) && is_array($row['debug_fields'])): ?>
+                                                    <div class="mt-2 small">
+                                                        <?php foreach ($row['debug_fields'] as $fieldDebug): ?>
+                                                            <div class="border rounded p-2 mb-2">
+                                                                <div><strong>Champ :</strong> <?= e((string) ($fieldDebug['field'] ?? '')) ?></div>
+                                                                <div><strong>Valeur :</strong> <?= e((string) ($fieldDebug['actual'] ?? '')) ?></div>
+                                                                <div><strong>Règle :</strong> <?= e(json_encode($fieldDebug['rule'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '') ?></div>
+                                                                <div>
+                                                                    <strong>État :</strong>
+                                                                    <?php if (!empty($fieldDebug['ok'])): ?>
+                                                                        <span class="badge text-bg-success">Correct</span>
+                                                                    <?php else: ?>
+                                                                        <span class="badge text-bg-danger">Faux</span>
+                                                                    <?php endif; ?>
+                                                                </div>
+                                                                <div><strong>Points :</strong> <?= e(number_format((float) ($fieldDebug['points'] ?? 0), 2, '.', '')) ?></div>
+                                                            </div>
+                                                        <?php endforeach; ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </td>
                                             <td class="text-end"><?= e(number_format((float) ($row['score'] ?? 0), 2, '.', '')) ?></td>
                                         </tr>
                                     <?php endforeach; ?>
