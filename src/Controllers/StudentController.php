@@ -734,6 +734,7 @@ final class StudentController extends Controller
 
             $correctionMode = (string) ($snapshot['correction_mode'] ?? '');
             $pointsPerChar = (float) ($snapshot['points_per_char'] ?? 1);
+            $normalizer = (string) ($snapshot['normalizer'] ?? '');
 
             if ($isAnswered) {
                 if ($correctionMode === 'per_character_position') {
@@ -805,6 +806,31 @@ final class StudentController extends Controller
                     } else {
                         $isCorrect = ($good >= min(count($expectedItems), (int) floor($maxScore / max($pointsPerItem, 1))));
                     }
+                } elseif ($correctionMode === 'normalized_exact') {
+                    $normalizedActual = $this->normalizeExactInputValue($value, $normalizer);
+                    $normalizedExpected = $this->normalizeExactInputValue($expected, $normalizer);
+
+                    $expectedDebug = $normalizedExpected;
+
+                    if ($normalizedActual === $normalizedExpected && $normalizedExpected !== '') {
+                        $score = $questionPoints;
+                        $isCorrect = true;
+                    }
+                } elseif ($correctionMode === 'normalized_exact_any') {
+                    $expectedAny = isset($snapshot['expected_any']) && is_array($snapshot['expected_any'])
+                        ? array_values(array_filter(array_map(
+                            fn($item): string => $this->normalizeExactInputValue((string) $item, $normalizer),
+                            $snapshot['expected_any']
+                        )))
+                        : [];
+
+                    $normalizedActual = $this->normalizeExactInputValue($value, $normalizer);
+                    $expectedDebug = json_encode($expectedAny, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
+
+                    if ($normalizedActual !== '' && in_array($normalizedActual, $expectedAny, true)) {
+                        $score = $questionPoints;
+                        $isCorrect = true;
+                    }
                 } else {
                     if ($expected !== '') {
                         if (mb_strtolower($value) === mb_strtolower($expected)) {
@@ -813,7 +839,6 @@ final class StudentController extends Controller
                         }
                     }
                 }
-            }
         } elseif ($type === 'inputs') {
             $values = isset($answersMulti[$userAnswerRowId]) && is_array($answersMulti[$userAnswerRowId])
                 ? array_values(array_map(static fn($v): string => trim((string) $v), $answersMulti[$userAnswerRowId]))
@@ -881,6 +906,114 @@ final class StudentController extends Controller
             'is_answered' => $isAnswered,
             'is_correct' => $isCorrect,
         ];
+    }
+
+    private function normalizeExactInputValue(string $value, string $normalizer): string
+    {
+        return match ($normalizer) {
+            'python_condition_basic' => $this->normalizePythonConditionBasic($value),
+            'pascal_condition_basic' => $this->normalizePascalConditionBasic($value),
+            'lower_trim' => $this->normalizeLowerTrim($value),
+            'python_else_basic' => $this->normalizePythonElseBasic($value),
+            'python_print_ignore_string' => $this->normalizePythonPrintIgnoreString($value),
+            'pascal_write_ignore_string' => $this->normalizePascalWriteIgnoreString($value),
+            'assignment_basic' => $this->normalizeAssignmentBasic($value),
+            'python_condition_compact' => $this->normalizePythonConditionCompact($value),
+            'pascal_condition_no_parentheses' => $this->normalizePascalConditionNoParentheses($value),
+            default => trim($value),
+        };
+    }
+
+    private function normalizeLowerTrim(string $value): string
+    {
+        $value = trim($value);
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        return mb_strtolower($value);
+    }
+
+    private function normalizePythonConditionBasic(string $value): string
+    {
+        $value = trim($value);
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        $value = preg_replace('/\s*<=\s*/u', '<=', $value) ?? $value;
+        $value = preg_replace('/\s*!=\s*/u', '!=', $value) ?? $value;
+        $value = preg_replace('/\s*:\s*/u', ':', $value) ?? $value;
+        $value = preg_replace('/\s+:/u', ':', $value) ?? $value;
+        return $value;
+    }
+
+    private function normalizePascalConditionBasic(string $value): string
+    {
+        $value = mb_strtolower(trim($value));
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        $value = preg_replace('/\s*<=\s*/u', '<=', $value) ?? $value;
+        $value = preg_replace('/\s*<>\s*/u', '<>', $value) ?? $value;
+        return $value;
+    }
+
+    private function normalizePythonElseBasic(string $value): string
+    {
+        $value = trim($value);
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        $value = preg_replace('/\s*:\s*/u', ':', $value) ?? $value;
+        $value = preg_replace('/\s+:/u', ':', $value) ?? $value;
+        return mb_strtolower($value);
+    }
+
+    private function normalizePythonPrintIgnoreString(string $value): string
+    {
+        $value = trim($value);
+        $value = str_replace('"', "'", $value);
+        $value = preg_replace("/'[^']*'/u", "''", $value) ?? $value;
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        $value = preg_replace('/\s*\(\s*/u', '(', $value) ?? $value;
+        $value = preg_replace('/\s*\)\s*/u', ')', $value) ?? $value;
+        $value = preg_replace('/\s*,\s*/u', ',', $value) ?? $value;
+        return $value;
+    }
+
+    private function normalizePascalWriteIgnoreString(string $value): string
+    {
+        $value = mb_strtolower(trim($value));
+        $value = str_replace('"', "'", $value);
+        $value = preg_replace("/'[^']*'/u", "''", $value) ?? $value;
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        $value = preg_replace('/\s*\(\s*/u', '(', $value) ?? $value;
+        $value = preg_replace('/\s*\)\s*/u', ')', $value) ?? $value;
+        $value = preg_replace('/\s*,\s*/u', ',', $value) ?? $value;
+        $value = preg_replace('/\s*;\s*/u', ';', $value) ?? $value;
+        return $value;
+    }
+
+    private function normalizeAssignmentBasic(string $value): string
+    {
+        $value = trim($value);
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        $value = preg_replace('/\s*=\s*/u', '=', $value) ?? $value;
+        return $value;
+    }
+
+    private function normalizePythonConditionCompact(string $value): string
+    {
+        $value = trim($value);
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        $value = preg_replace('/\s*>=\s*/u', '>=', $value) ?? $value;
+        $value = preg_replace('/\s*<=\s*/u', '<=', $value) ?? $value;
+        $value = preg_replace('/\s*\(\s*/u', '(', $value) ?? $value;
+        $value = preg_replace('/\s*\)\s*/u', ')', $value) ?? $value;
+        $value = preg_replace('/\)\s+and\s+\(/iu', ')and(', $value) ?? $value;
+        $value = preg_replace('/\s*:\s*/u', ':', $value) ?? $value;
+        $value = preg_replace('/\s+:/u', ':', $value) ?? $value;
+        return $value;
+    }
+
+    private function normalizePascalConditionNoParentheses(string $value): string
+    {
+        $value = mb_strtolower(trim($value));
+        $value = str_replace(['(', ')'], '', $value);
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        $value = preg_replace('/\s*>\s*/u', '>', $value) ?? $value;
+        return $value;
     }
 
     private function evaluateCpAnswer(array $rawValues, array $snapshot): array

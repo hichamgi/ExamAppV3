@@ -33,6 +33,7 @@ final class QuestionRendererService
             'algo_fill' => $this->renderAlgoFill($normalizedQuestion),
             'code_path' => $this->renderCodePath($normalizedQuestion),
             'rom_types_input' => $this->renderRomTypesInput($normalizedQuestion),
+            'normalized_input' => $this->renderNormalizedInput($normalizedQuestion),
             default => $this->renderStatic($normalizedQuestion),
         };
 
@@ -42,6 +43,32 @@ final class QuestionRendererService
             'snapshot' => $payload,
             'snapshot_json' => $this->encodeSnapshot($payload),
             'correct_answer_text' => $this->buildCorrectAnswerText($payload),
+        ];
+    }
+
+    private function renderNormalizedInput(array $question): array
+    {
+        $metadata = $question['metadata'];
+
+        $correctionMode = $this->normalizeString($metadata['correction_mode'] ?? 'normalized_exact');
+        $normalizer = $this->normalizeString($metadata['normalizer'] ?? '');
+
+        $expected = $this->normalizeString($metadata['expected'] ?? '');
+        $expectedAny = isset($metadata['expected_any']) && is_array($metadata['expected_any'])
+            ? array_values(array_filter(array_map(
+                fn($item): string => $this->normalizeString($item),
+                $metadata['expected_any']
+            )))
+            : [];
+
+        return [
+            'q' => $question['question_text'],
+            'type' => self::TYPE_INPUT,
+            'correction_mode' => $correctionMode,
+            'normalizer' => $normalizer,
+            'expected_text' => $expected,
+            'expected_any' => $expectedAny,
+            'options' => [],
         ];
     }
 
