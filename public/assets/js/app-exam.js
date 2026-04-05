@@ -50,6 +50,8 @@ function finalizeExam() {
     data.finalized_at_client = new Date().toISOString();
 
     localStorage.setItem(storageKey, JSON.stringify(data));
+    
+    data.hash = sha256(JSON.stringify(data.answers));
 
     sendFinal(data);
 }
