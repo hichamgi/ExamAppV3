@@ -29,7 +29,7 @@ final class QuestionRendererService
             'schema_image' => $this->renderSchemaImage($normalizedQuestion),
             'schema_mapping' => $this->renderSchemaMapping($normalizedQuestion),
             'algo_pascal_conversion' => $this->renderAlgoPascalConversion($normalizedQuestion),
-            'inputs_blocks' => $this->renderInputsBlocks($normalizedQuestion),
+            'inputs_blocks' => $this->renderInputsBlocks($normalizedQuestion,$context),
             'algo_fill' => $this->renderAlgoFill($normalizedQuestion),
             'code_path' => $this->renderCodePath($normalizedQuestion),
             'rom_types_input' => $this->renderRomTypesInput($normalizedQuestion),
@@ -136,7 +136,7 @@ final class QuestionRendererService
         return [
             'q' => $questionText,
             'type' => $question['type'],
-            'options' => $options,
+            'options' => $this->shuffleSnapshotOptions($options),
         ];
     }
 
@@ -162,7 +162,7 @@ final class QuestionRendererService
         return [
             'q' => $questionText,
             'type' => $question['type'],
-            'options' => $options,
+            'options' => $this->shuffleSnapshotOptions($options),
         ];
     }
 
@@ -345,9 +345,9 @@ final class QuestionRendererService
         ];
     }
 
-    private function renderInputsBlocks(array $question): array
+    private function renderInputsBlocks(array $question, array $context): array
     {
-        $generated = $this->generateLegacyBlocks();
+        $generated = $this->generateLegacyBlocks($context);
 
         return [
             'q' => $question['question_text'],
@@ -507,7 +507,7 @@ final class QuestionRendererService
             ];
         }
 
-        return $options;
+        return $this->shuffleSnapshotOptions($options);
     }
 
     private function buildSchemaMappingFromOptions(array $answerOptions, int $schemaNumber): array
@@ -571,10 +571,10 @@ final class QuestionRendererService
         return $imageSet . '-' . $schemaNumber . '.' . ltrim($extension, '.');
     }
 
-    private function generateLegacyBlocks(): array
+    private function generateLegacyBlocks(array $context): array
     {
-        $first = $this->legacyBlockGenerator(1);
-        $second = $this->legacyBlockGenerator(2);
+        $first = $this->legacyBlockGenerator(1,$context);
+        $second = $this->legacyBlockGenerator(2,$context);
 
         return [
             'html' => $first['qst'] . $second['qst'],
@@ -582,7 +582,7 @@ final class QuestionRendererService
         ];
     }
 
-    private function legacyBlockGenerator(int $n): array
+    /*private function legacyBlockGenerator(int $n): array
     {
         do {
             $a1 = random_int(10, 20);
@@ -609,15 +609,160 @@ final class QuestionRendererService
 
         return [
             'qst' =>
-                "<br>A={$a1}+{$a2}*{$a3}+({$a4}-{$a5}*{$a6})/{$a7} [__INPUT_{$n}_1__]" .
-                "<br>A=A/{$a8}-{$a9} [__INPUT_{$n}_2__]" .
-                "<br>A=A/{$a10} [__INPUT_{$n}_3__]<br>",
+                "<br>A ← {$a1}+{$a2}*{$a3}+({$a4}-{$a5}*{$a6})/{$a7} [__INPUT_{$n}_1__]" .
+                "<br>A ← A/{$a8}-{$a9} [__INPUT_{$n}_2__]" .
+                "<br>A ← A/{$a10} [__INPUT_{$n}_3__]<br>",
             'expected' => [
                 (string) ((int) $A1),
                 (string) ((int) $A2),
                 (string) ((int) $A3),
             ],
         ];
+    }*/
+
+    private function legacyBlockGenerator(int $n, array $context): array
+    {
+        $seed = $this->buildLegacySeed($n, $context);
+
+        mt_srand($seed);
+
+        do {
+            $a1 = mt_rand(10, 20);
+            $a2 = mt_rand(2, 9);
+            $a3 = mt_rand(2, 9);
+
+            $a5 = mt_rand(2, 3);
+            $a6 = mt_rand(2, 3);
+            $a7 = mt_rand(2, 9);
+
+            $k = mt_rand(0, 3);
+            $a4 = ($a5 * $a6) + ($k * $a7);
+
+            if ($a4 < 2 || $a4 > 9) {
+                continue;
+            }
+
+            $A1 = $a1 + $a2 * $a3 + $k;
+
+            if ($A1 <= 0 || $A1 >= 50) {
+                continue;
+            }
+
+            $a8 = mt_rand(2, 9);
+            $a9 = mt_rand(2, 9);
+
+            $tmpA2 = ($A1 / $a8) - $a9;
+
+            if (!$this->isWholeNumber($tmpA2)) {
+                continue;
+            }
+
+            $A2 = (int) $tmpA2;
+
+            if ($A2 <= 0 || $A2 >= 50) {
+                continue;
+            }
+
+            $a10 = mt_rand(2, 9);
+
+            $tmpA3 = $A2 / $a10;
+
+            if (!$this->isWholeNumber($tmpA3)) {
+                continue;
+            }
+
+            $A3 = (int) $tmpA3;
+
+            if ($A3 <= 0 || $A3 >= 50) {
+                continue;
+            }
+
+            break;
+
+        } while (true);
+
+        mt_srand(); // reset
+
+        return [
+            'qst' =>
+                "<br>A={$a1}+{$a2}*{$a3}+({$a4}-{$a5}*{$a6})/{$a7} [__INPUT_{$n}_1__]" .
+                "<br>A=A/{$a8}-{$a9} [__INPUT_{$n}_2__]" .
+                "<br>A=A/{$a10} [__INPUT_{$n}_3__]<br>",
+            'expected' => [
+                (string) $A1,
+                (string) $A2,
+                (string) $A3,
+            ],
+        ];
+    }
+
+    private function resolveLegacyBlockPoolIndex(array $pool, int $n, array $context): int
+    {
+        $poolSize = count($pool);
+
+        if ($poolSize === 0) {
+            throw new \RuntimeException('Pool legacyBlockGenerator vide.');
+        }
+
+        $seedParts = [
+            'n' . $n,
+            'user:' . (string) ($context['user_id'] ?? 0),
+            'class:' . (string) ($context['class_id'] ?? 0),
+            'exam:' . (string) ($context['exam_id'] ?? 0),
+            'question:' . (string) ($context['question_id'] ?? 0),
+            'num:' . (string) ($context['question_num'] ?? 0),
+            'user_exam:' . (string) ($context['user_exam_id'] ?? 0),
+        ];
+
+        $seed = implode('|', $seedParts);
+        $hash = hash('sha256', $seed);
+        $number = hexdec(substr($hash, 0, 12));
+
+        return (int) ($number % $poolSize);
+    }
+
+    private function deduplicateLegacyBlockPool(array $pool): array
+    {
+        $unique = [];
+
+        foreach ($pool as $row) {
+            $key = implode('|', [
+                $row['a1'],
+                $row['a2'],
+                $row['a3'],
+                $row['a4'],
+                $row['a5'],
+                $row['a6'],
+                $row['a7'],
+                $row['a8'],
+                $row['a9'],
+                $row['a10'],
+                $row['A1'],
+                $row['A2'],
+                $row['A3'],
+            ]);
+
+            $unique[$key] = $row;
+        }
+
+        return $unique;
+    }
+
+    private function buildLegacySeed(int $n, array $context): int
+    {
+        $seedString = implode('|', [
+            'n' . $n,
+            'user:' . ($context['user_id'] ?? 0),
+            'class:' . ($context['class_id'] ?? 0),
+            'exam:' . ($context['exam_id'] ?? 0),
+            'q:' . ($context['question_id'] ?? 0),
+            'num:' . ($context['question_num'] ?? 0),
+            'ue:' . ($context['user_exam_id'] ?? 0),
+        ]);
+
+        $hash = hash('sha256', $seedString);
+
+        return hexdec(substr($hash, 0, 8));
     }
 
     private function generateLegacyAlgoFill(): array
@@ -1018,5 +1163,16 @@ final class QuestionRendererService
             . "            ECRIRE('Prix a payer : ', prix);\n"
             . "      FINSI\n"
             . "FIN";
+    }
+
+    private function shuffleSnapshotOptions(array $options): array
+    {
+        if (count($options) <= 1) {
+            return $options;
+        }
+
+        shuffle($options);
+
+        return array_values($options);
     }
 }

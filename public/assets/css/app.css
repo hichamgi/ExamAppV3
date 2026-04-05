@@ -222,6 +222,18 @@ body.app-body {
     padding-bottom: .35rem;
 }
 
+.exam-countdown {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.exam-countdown-bloc {
+    text-align: center;
+}
+
 @media (max-width: 991.98px) {
     .hero-card::after {
         width: 120px;

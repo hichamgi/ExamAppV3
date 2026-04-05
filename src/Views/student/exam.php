@@ -7,6 +7,7 @@ $network = $network ?? [];
 $activeExam = $active_exam ?? null;
 $questions = is_array($questions ?? null) ? $questions : [];
 $computer = is_array($network['computer'] ?? null) ? $network['computer'] : null;
+$attempt = is_array($attempt ?? null) ? $attempt : [];
 
 $renderQuestionCard = static function (array $question): void {
     $snapshot = is_array($question['snapshot'] ?? null) ? $question['snapshot'] : [];
@@ -352,7 +353,7 @@ $renderQuestionCard = static function (array $question): void {
 ?>
 
 <div class="row g-4 mb-4">
-    <div class="col-lg-8">
+    <div class="col-lg-12">
         <div class="card shadow-sm border-0">
             <div class="card-body p-4">
                 <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
@@ -377,20 +378,25 @@ $renderQuestionCard = static function (array $question): void {
             </div>
         </div>
     </div>
+</div>
 
-    <div class="col-lg-4">
-        <div class="card shadow-sm border-0 h-100">
-            <div class="card-body p-4">
-                <h2 class="h6 mb-3">Contexte poste</h2>
+<div class="card shadow-sm border-0 mb-4 sticky-top" style="top: 70px; z-index: 10;">
+    <div class="card-body p-3 text-center">
+        <div class="small text-secondary mb-2">Temps restant pour le contrôle</div>
 
-                <div class="small text-secondary mb-1">Poste</div>
-                <div class="fw-semibold mb-3"><?= e((string) ($computer['name'] ?? 'Non détecté')) ?></div>
-
-                <div class="small text-secondary mb-1">IP</div>
-                <div class="fw-semibold mb-3"><?= e((string) ($network['ip'] ?? '')) ?></div>
-
-                <div class="small text-secondary mb-1">Réseau</div>
-                <div class="fw-semibold text-uppercase"><?= e((string) ($network['network_type'] ?? 'unknown')) ?></div>
+        <div
+            id="countdown"
+            class="d-inline-flex align-items-center justify-content-center gap-4 flex-wrap"
+            data-ends-at="<?= e((string) ($attempt['ends_at'] ?? '')) ?>"
+            data-server-now="<?= e((string) ($attempt['server_now'] ?? '')) ?>"
+        >
+            <div class="text-center">
+                <div class="badge text-bg-primary fs-4 px-3 py-2" id="minutes">00</div>
+                <div class="small text-secondary mt-1">Minutes</div>
+            </div>
+            <div class="text-center">
+                <div class="badge text-bg-success fs-4 px-3 py-2" id="seconds">00</div>
+                <div class="small text-secondary mt-1">Secondes</div>
             </div>
         </div>
     </div>
@@ -414,7 +420,7 @@ $renderQuestionCard = static function (array $question): void {
                 <i class="bi bi-arrow-left me-2"></i>Retour
             </a>
 
-            <button type="submit" class="btn btn-danger btn-lg">
+            <button type="submit" id="submitExamBtn" class="btn btn-danger btn-lg">
                 <i class="bi bi-send-check me-2"></i>Remettre l’examen
             </button>
         </div>
@@ -426,21 +432,16 @@ window.ExamAppPage = {
     type: 'student-exam',
     heartbeatUrl: '<?= e(rtrim((string) \App\Core\Config::get('app.base_url', ''), '/') . '/api/student/heartbeat') ?>',
     csrfHeartbeat: '<?= e((string) ($csrf_heartbeat ?? '')) ?>',
-    userExamId: <?= (int) ($activeExam['user_exam_id'] ?? 0) ?>
-};
-
-window.ATTEMPT_TOKEN = "<?= htmlspecialchars($attempt['attempt_token'], ENT_QUOTES) ?>";
-
-window.EXAM_CONFIG = {
-    syncUrl: "<?= $this->baseUrl('/api/student/exam/sync') ?>",
-    submitUrl: "<?= $this->baseUrl('/api/student/exam/submit') ?>",
-    stateUrl: "<?= $this->baseUrl('/api/student/exam/state') ?>",
-
-    csrf: {
-        sync: "<?= \App\Core\Csrf::token('exam_sync') ?>",
-        submit: "<?= \App\Core\Csrf::token('exam_submit') ?>"
-    }
+    userExamId: <?= (int) ($activeExam['user_exam_id'] ?? 0) ?>,
+    attemptToken: '<?= e((string) ($attempt['attempt_token'] ?? '')) ?>',
+    endsAt: '<?= e((string) ($attempt['ends_at'] ?? '')) ?>',
+    serverNow: '<?= e((string) ($attempt['server_now'] ?? '')) ?>',
+    syncUrl: '<?= e((string) ($exam_sync_url ?? '')) ?>',
+    submitUrl: '<?= e((string) ($exam_submit_url ?? '')) ?>',
+    stateUrl: '<?= e((string) ($exam_state_url ?? '')) ?>',
+    dashboardUrl: '<?= e(base_url('student/dashboard')) ?>',
+    csrfSync: '<?= e((string) ($csrf_exam_sync ?? '')) ?>',
+    csrfSubmit: '<?= e((string) ($csrf_exam_submit ?? '')) ?>'
 };
 </script>
-
-<script src="<?= $this->baseUrl('/assets/js/app-exam.js') ?>"></script>
+<script src="<?= e(asset_url('js/app-exam.js')) ?>"></script>
