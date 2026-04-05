@@ -1231,4 +1231,41 @@ final class StudentController extends Controller
             'closed_at' => (string) ($row['closed_at'] ?? ''),
         ];
     }
+
+    public function sync()
+    {
+        Csrf::assertRequest($this->request);
+
+        $user = SessionManager::get('user');
+
+        $token = $this->request->input('attempt_token');
+        $answers = $this->request->input('answers');
+
+        $service = new ExamAttemptService();
+
+        $ok = $service->syncAnswers($token, $user['id'], $answers);
+
+        return $this->json([
+            'success' => $ok,
+            'server_time' => date('Y-m-d H:i:s')
+        ]);
+    }
+
+    public function submit()
+    {
+        Csrf::assertRequest($this->request);
+
+        $user = SessionManager::get('user');
+
+        $token = $this->request->input('attempt_token');
+        $snapshot = $this->request->input('snapshot');
+
+        $service = new ExamAttemptService();
+
+        $ok = $service->submitFinal($token, $user['id'], $snapshot);
+
+        return $this->json([
+            'success' => $ok
+        ]);
+    }
 }
