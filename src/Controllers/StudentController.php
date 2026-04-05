@@ -145,26 +145,32 @@ final class StudentController extends Controller
 
         $attemptService = new ExamAttemptService();
 
-        $existingAttempt = Database::fetchOne(
-            "
-            SELECT *
-            FROM exam_attempts
-            WHERE user_id = :user_id
-            AND class_id = :class_id
-            AND exam_id = :exam_id
-            AND session_token = :session_token
-            AND status IN ('in_progress', 'pending_sync', 'finalizing_offline')
-            AND locked_at IS NULL
-            ORDER BY id DESC
-            LIMIT 1
-            ",
-            [
-                'user_id' => $userId,
-                'class_id' => $classId,
-                'exam_id' => (int) $activeExam['exam_id'],
-                'session_token' => (string) SessionManager::get('session_token'),
-            ]
-        );
+        $sessionToken = SessionManager::sessionToken();
+
+        $existingAttempt = null;
+
+        if ($sessionToken !== null && $sessionToken !== '') {
+            $existingAttempt = Database::fetchOne(
+                "
+                SELECT *
+                FROM exam_attempts
+                WHERE user_id = :user_id
+                AND class_id = :class_id
+                AND exam_id = :exam_id
+                AND session_token = :session_token
+                AND status IN ('in_progress', 'pending_sync', 'finalizing_offline')
+                AND locked_at IS NULL
+                ORDER BY id DESC
+                LIMIT 1
+                ",
+                [
+                    'user_id' => $userId,
+                    'class_id' => $classId,
+                    'exam_id' => (int) $activeExam['exam_id'],
+                    'session_token' => hash('sha256', $sessionToken),
+                ]
+            );
+        }
 
         if (is_array($existingAttempt) && !empty($existingAttempt['attempt_token'])) {
             $attempt = [
@@ -1238,9 +1244,9 @@ final class StudentController extends Controller
             return;
         }
 
-        $user = SessionManager::get('user');
+        $user = SessionManager::auth();
 
-        if (!is_array($user) || empty($user['id'])) {
+        if (!is_array($user) || empty($user['user_id'])) {
             $this->json(['success' => false, 'message' => 'Utilisateur introuvable.'], 401);
             return;
         }
@@ -1258,7 +1264,7 @@ final class StudentController extends Controller
         $service = new ExamAttemptService();
         $answerService = new ExamAnswerService();
 
-        $attempt = $service->validateAttempt($token, (int) $user['id']);
+        $attempt = $service->validateAttempt($token, (int) $user['user_id']);
 
         if (!$attempt) {
             $this->json(['success' => false, 'message' => 'Tentative invalide.'], 403);
@@ -1276,7 +1282,7 @@ final class StudentController extends Controller
 
         $ok = $service->sync(
             $token,
-            (int) $user['id'],
+            (int) $user['user_id'],
             $answers,
             $answerService
         );
@@ -1318,9 +1324,9 @@ final class StudentController extends Controller
             return;
         }
 
-        $user = SessionManager::get('user');
+        $user = SessionManager::auth();
 
-        if (!is_array($user) || empty($user['id'])) {
+        if (!is_array($user) || empty($user['user_id'])) {
             $this->json(['success' => false, 'message' => 'Utilisateur introuvable.'], 401);
             return;
         }
@@ -1339,7 +1345,7 @@ final class StudentController extends Controller
 
         $ok = $service->submitFinal(
             $token,
-            (int) $user['id'],
+            (int) $user['user_id'],
             $snapshot
         );
 
@@ -1373,9 +1379,9 @@ final class StudentController extends Controller
             return;
         }
 
-        $user = SessionManager::get('user');
+        $user = SessionManager::auth();
 
-        if (!is_array($user) || empty($user['id'])) {
+        if (!is_array($user) || empty($user['user_id'])) {
             $this->json(['success' => false, 'message' => 'Utilisateur introuvable.'], 401);
             return;
         }
@@ -1390,7 +1396,7 @@ final class StudentController extends Controller
         $attemptService = new ExamAttemptService();
         $answerService = new ExamAnswerService();
 
-        $attempt = $attemptService->validateAttempt($token, (int) $user['id']);
+        $attempt = $attemptService->validateAttempt($token, (int) $user['user_id']);
 
         if (!$attempt) {
             $this->json(['success' => false, 'message' => 'Tentative invalide.'], 404);

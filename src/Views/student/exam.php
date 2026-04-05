@@ -428,4 +428,19 @@ window.ExamAppPage = {
     csrfHeartbeat: '<?= e((string) ($csrf_heartbeat ?? '')) ?>',
     userExamId: <?= (int) ($activeExam['user_exam_id'] ?? 0) ?>
 };
+
+window.ATTEMPT_TOKEN = "<?= htmlspecialchars($attempt['attempt_token'], ENT_QUOTES) ?>";
+
+window.EXAM_CONFIG = {
+    syncUrl: "<?= $this->baseUrl('/api/student/exam/sync') ?>",
+    submitUrl: "<?= $this->baseUrl('/api/student/exam/submit') ?>",
+    stateUrl: "<?= $this->baseUrl('/api/student/exam/state') ?>",
+
+    csrf: {
+        sync: "<?= \App\Core\Csrf::token('exam_sync') ?>",
+        submit: "<?= \App\Core\Csrf::token('exam_submit') ?>"
+    }
+};
 </script>
+
+<script src="<?= $this->baseUrl('/assets/js/app-exam.js') ?>"></script>
