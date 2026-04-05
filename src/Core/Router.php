@@ -6,8 +6,6 @@ namespace App\Core;
 
 use Closure;
 use RuntimeException;
-use App\Core\SecurityMiddleware;
-use App\Core\Request;
 
 final class Router
 {
@@ -64,9 +62,11 @@ final class Router
 
             $params = $this->extractParams($matches, $route['paramNames']);
 
-            // SECURITY
-            $request = new Request();
-            SecurityMiddleware::handle($request);
+            $request = Request::capture();
+
+            if ($this->shouldApplySecurity($request)) {
+                SecurityMiddleware::handle($request);
+            }
 
             $response = $this->invokeHandler($route['handler'], $params);
 
@@ -146,6 +146,28 @@ final class Router
         $path = '/' . trim($path, '/');
 
         return $path === '//' ? '/' : $path;
+    }
+
+    private function shouldApplySecurity(Request $request): bool
+    {
+        $path = $request->path();
+
+        if ($path === '/health') {
+            return false;
+        }
+
+        if ($path === '/' || $path === '/login') {
+            return false;
+        }
+
+        if ($path === '/api/auth/login' || $path === '/api/auth/session') {
+            return false;
+        }
+
+        return str_starts_with($path, '/admin/')
+            || str_starts_with($path, '/student/')
+            || str_starts_with($path, '/api/admin/')
+            || str_starts_with($path, '/api/student/');
     }
 
     private function invokeHandler(callable|array|string $handler, array $params): mixed

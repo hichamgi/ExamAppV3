@@ -207,6 +207,11 @@ final class App
         $router->get('/api/admin/alerts', [AdminController::class, 'loginAlerts']);
         $router->post('/api/student/heartbeat', [StudentController::class, 'heartbeat']);
 
+        // ===== EXAM JSON API =====
+        $router->post('/api/student/exam/sync', [StudentController::class, 'sync']);
+        $router->post('/api/student/exam/submit', [StudentController::class, 'submit']);
+        $router->get('/api/student/exam/state', [StudentController::class, 'state']);
+
         $router->post('/api/auth/login', [AuthController::class, 'login']);
         $router->post('/api/auth/logout', [AuthController::class, 'logout']);
         $router->get('/api/auth/session', [AuthController::class, 'sessionStatus']);

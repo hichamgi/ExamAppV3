@@ -127,7 +127,7 @@ final class StudentController extends Controller
         $userId = (int) ($student['id'] ?? 0);
         $classId = (int) ($student['class_id'] ?? 0);
 
-        $requestedUserExamId = isset($_GET['user_exam_id']) ? (int) $_GET['user_exam_id'] : 0;
+        $requestedUserExamId = $this->request()->int('user_exam_id', 0);
 
         if ($requestedUserExamId <= 0) {
             $this->redirect($this->baseUrl('/student/dashboard'));
@@ -143,15 +143,62 @@ final class StudentController extends Controller
 
         $questions = $this->getExamQuestions((int) $activeExam['user_exam_id']);
 
+        $attemptService = new ExamAttemptService();
+
+        $existingAttempt = Database::fetchOne(
+            "
+            SELECT *
+            FROM exam_attempts
+            WHERE user_id = :user_id
+            AND class_id = :class_id
+            AND exam_id = :exam_id
+            AND session_token = :session_token
+            AND status IN ('in_progress', 'pending_sync', 'finalizing_offline')
+            AND locked_at IS NULL
+            ORDER BY id DESC
+            LIMIT 1
+            ",
+            [
+                'user_id' => $userId,
+                'class_id' => $classId,
+                'exam_id' => (int) $activeExam['exam_id'],
+                'session_token' => (string) SessionManager::get('session_token'),
+            ]
+        );
+
+        if (is_array($existingAttempt) && !empty($existingAttempt['attempt_token'])) {
+            $attempt = [
+                'attempt_token' => (string) $existingAttempt['attempt_token'],
+                'started_at' => (string) ($existingAttempt['started_at'] ?? ''),
+                'ends_at' => (string) ($existingAttempt['ends_at'] ?? ''),
+                'server_now' => date('Y-m-d H:i:s'),
+            ];
+        } else {
+            $attempt = $attemptService->createAttempt(
+                $userId,
+                $classId,
+                (int) $activeExam['exam_id'],
+                (int) ($activeExam['duration_minutes'] ?? 0)
+            );
+        }
+
+        $baseUrl = rtrim((string) Config::get('app.base_url', ''), '/');
+
         $this->render('student.exam', [
             'title' => 'Passage examen',
             'student' => $student,
             'network' => $network,
             'active_exam' => $activeExam,
             'questions' => $questions,
+            'attempt' => $attempt,
             'csrf_logout' => Csrf::token('auth.logout'),
             'csrf_heartbeat' => Csrf::token('student.heartbeat'),
             'csrf_exam_submit' => Csrf::token('student.exam.submit'),
+            'csrf_exam_sync' => Csrf::token('student.exam.sync'),
+            'csrf_exam_state' => Csrf::token('student.exam.state'),
+            'exam_sync_url' => $baseUrl . '/api/student/exam/sync',
+            'exam_submit_url' => $baseUrl . '/api/student/exam/submit',
+            'exam_state_url' => $baseUrl . '/api/student/exam/state',
         ], 'layouts.main');
     }
 
@@ -355,81 +402,6 @@ final class StudentController extends Controller
             'csrf' => [
                 'heartbeat' => Csrf::token('student.heartbeat'),
                 'logout' => Csrf::token('auth.logout'),
-            ],
-        ]);
-    }
-
-    public function heartbeat(): void
-    {
-        if (!$this->request()->isPost()) {
-            $this->json([
-                'success' => false,
-                'message' => 'Méthode non autorisée.',
-            ], 405);
-            return;
-        }
-
-        Csrf::assertRequest($this->request(), 'student.heartbeat');
-
-        SessionManager::enforceTimeout();
-        SessionManager::enforceIntegrity(false, true);
-
-        if (!SessionManager::check() || !SessionManager::isStudent()) {
-            $this->json([
-                'success' => false,
-                'message' => 'Session invalide.',
-            ], 401);
-            return;
-        }
-
-        $network = $this->networkComputerService->resolveAllowedComputerOrFail($this->request());
-
-        if (!(bool) ($network['success'] ?? false)) {
-            SessionManager::logout(true, true);
-
-            $this->json([
-                'success' => false,
-                'message' => (string) ($network['message'] ?? 'Poste non autorisé.'),
-                'network' => $network,
-            ], 403);
-            return;
-        }
-
-        $computerId = (int) ($network['computer_id'] ?? 0);
-        $ip = (string) ($network['ip'] ?? '');
-
-        $dbSession = SessionManager::currentDatabaseSession();
-
-        if ($dbSession === null) {
-            SessionManager::logout(true, true);
-
-            $this->json([
-                'success' => false,
-                'message' => 'Session applicative introuvable.',
-            ], 401);
-            return;
-        }
-
-        if ($computerId > 0 && !SessionManager::isCurrentSessionMatchingComputer($computerId, $ip)) {
-            SessionManager::logout(true, true);
-
-            $this->json([
-                'success' => false,
-                'message' => 'Le poste actuel ne correspond pas à la session autorisée.',
-            ], 403);
-            return;
-        }
-
-        SessionManager::touch(true);
-
-        $this->json([
-            'success' => true,
-            'message' => 'Heartbeat OK.',
-            'server_time' => date('Y-m-d H:i:s'),
-            'network' => [
-                'ip' => $ip,
-                'network_type' => (string) ($network['network_type'] ?? 'unknown'),
-                'computer' => $network['computer'] ?? null,
             ],
         ]);
     }
@@ -1238,108 +1210,275 @@ final class StudentController extends Controller
     // =========================
     // SYNC
     // =========================
-    public function sync()
+    public function sync(): void
     {
-        Csrf::assertRequest($this->request);
+        if (!$this->request()->isPost()) {
+            $this->json(['success' => false, 'message' => 'Méthode non autorisée.'], 405);
+            return;
+        }
+
+        Csrf::assertRequest($this->request(), 'student.exam.sync');
+
+        SessionManager::enforceTimeout();
+        SessionManager::enforceIntegrity(false, true);
+
+        if (!SessionManager::check() || !SessionManager::isStudent()) {
+            $this->json(['success' => false, 'message' => 'Session invalide.'], 401);
+            return;
+        }
+
+        $network = $this->networkComputerService->resolveAllowedComputerOrFail($this->request());
+
+        if (!(bool) ($network['success'] ?? false)) {
+            SessionManager::logout(true, true);
+            $this->json([
+                'success' => false,
+                'message' => (string) ($network['message'] ?? 'Poste non autorisé.'),
+            ], 403);
+            return;
+        }
 
         $user = SessionManager::get('user');
 
-        if (!$user) {
-            return $this->json(['success' => false], 401);
+        if (!is_array($user) || empty($user['id'])) {
+            $this->json(['success' => false, 'message' => 'Utilisateur introuvable.'], 401);
+            return;
         }
 
-        $data = $this->request->json();
+        $data = $this->request()->json();
 
-        $token = $data['attempt_token'] ?? null;
+        $token = isset($data['attempt_token']) ? trim((string) $data['attempt_token']) : '';
         $answers = $data['answers'] ?? [];
 
-        if (!$token || !is_array($answers)) {
-            return $this->json(['success' => false]);
+        if ($token === '' || !is_array($answers)) {
+            $this->json(['success' => false, 'message' => 'Payload invalide.'], 422);
+            return;
         }
 
         $service = new ExamAttemptService();
         $answerService = new ExamAnswerService();
 
-        $attempt = $service->validateAttempt($token, $user['id']);
+        $attempt = $service->validateAttempt($token, (int) $user['id']);
 
         if (!$attempt) {
-            return $this->json(['success' => false]);
+            $this->json(['success' => false, 'message' => 'Tentative invalide.'], 403);
+            return;
         }
 
-        // 🔥 RATE LIMIT (anti spam réseau)
-        if (!empty($attempt['last_sync_at'])) {
-            if (time() - strtotime($attempt['last_sync_at']) < 2) {
-                return $this->json(['success' => true]);
-            }
+        if (!empty($attempt['last_sync_at']) && (time() - strtotime((string) $attempt['last_sync_at'])) < 2) {
+            $this->json([
+                'success' => true,
+                'throttled' => true,
+                'server_time' => date('Y-m-d H:i:s'),
+            ]);
+            return;
         }
 
         $ok = $service->sync(
             $token,
-            $user['id'],
+            (int) $user['id'],
             $answers,
             $answerService
         );
 
-        return $this->json(['success' => $ok]);
+        $this->json([
+            'success' => $ok,
+            'server_time' => date('Y-m-d H:i:s'),
+        ]);
     }
 
     // =========================
     // SUBMIT FINAL
     // =========================
-    public function submit()
+    public function submit(): void
     {
-        Csrf::assertRequest($this->request);
+        if (!$this->request()->isPost()) {
+            $this->json(['success' => false, 'message' => 'Méthode non autorisée.'], 405);
+            return;
+        }
+
+        Csrf::assertRequest($this->request(), 'student.exam.submit');
+
+        SessionManager::enforceTimeout();
+        SessionManager::enforceIntegrity(false, true);
+
+        if (!SessionManager::check() || !SessionManager::isStudent()) {
+            $this->json(['success' => false, 'message' => 'Session invalide.'], 401);
+            return;
+        }
+
+        $network = $this->networkComputerService->resolveAllowedComputerOrFail($this->request());
+
+        if (!(bool) ($network['success'] ?? false)) {
+            SessionManager::logout(true, true);
+            $this->json([
+                'success' => false,
+                'message' => (string) ($network['message'] ?? 'Poste non autorisé.'),
+            ], 403);
+            return;
+        }
 
         $user = SessionManager::get('user');
 
-        if (!$user) {
-            return $this->json(['success' => false], 401);
+        if (!is_array($user) || empty($user['id'])) {
+            $this->json(['success' => false, 'message' => 'Utilisateur introuvable.'], 401);
+            return;
         }
 
-        $data = $this->request->json();
+        $data = $this->request()->json();
 
-        $token = $data['attempt_token'] ?? null;
+        $token = isset($data['attempt_token']) ? trim((string) $data['attempt_token']) : '';
         $snapshot = $data['snapshot'] ?? null;
 
-        if (!$token || !is_array($snapshot)) {
-            return $this->json(['success' => false]);
+        if ($token === '' || !is_array($snapshot)) {
+            $this->json(['success' => false, 'message' => 'Payload invalide.'], 422);
+            return;
         }
 
         $service = new ExamAttemptService();
 
         $ok = $service->submitFinal(
             $token,
-            $user['id'],
+            (int) $user['id'],
             $snapshot
         );
 
-        return $this->json(['success' => $ok]);
+        $this->json([
+            'success' => $ok,
+            'server_time' => date('Y-m-d H:i:s'),
+        ]);
     }
 
     // =========================
     // RESTORE STATE
     // =========================
-    public function state()
+    public function state(): void
     {
+        SessionManager::enforceTimeout();
+        SessionManager::enforceIntegrity(false, true);
+
+        if (!SessionManager::check() || !SessionManager::isStudent()) {
+            $this->json(['success' => false, 'message' => 'Session invalide.'], 401);
+            return;
+        }
+
+        $network = $this->networkComputerService->resolveAllowedComputerOrFail($this->request());
+
+        if (!(bool) ($network['success'] ?? false)) {
+            SessionManager::logout(true, true);
+            $this->json([
+                'success' => false,
+                'message' => (string) ($network['message'] ?? 'Poste non autorisé.'),
+            ], 403);
+            return;
+        }
+
         $user = SessionManager::get('user');
 
-        $token = $_GET['attempt_token'] ?? null;
+        if (!is_array($user) || empty($user['id'])) {
+            $this->json(['success' => false, 'message' => 'Utilisateur introuvable.'], 401);
+            return;
+        }
+
+        $token = trim((string) $this->request()->query('attempt_token', ''));
+
+        if ($token === '') {
+            $this->json(['success' => false, 'message' => 'Token manquant.'], 422);
+            return;
+        }
 
         $attemptService = new ExamAttemptService();
         $answerService = new ExamAnswerService();
 
-        $attempt = $attemptService->validateAttempt($token, $user['id']);
+        $attempt = $attemptService->validateAttempt($token, (int) $user['id']);
 
         if (!$attempt) {
-            return $this->json(['success' => false]);
+            $this->json(['success' => false, 'message' => 'Tentative invalide.'], 404);
+            return;
         }
 
         $answers = $answerService->getDraft($token);
 
-        return $this->json([
+        $this->json([
             'success' => true,
             'attempt' => $attempt,
-            'answers' => $answers
+            'answers' => $answers,
+            'server_time' => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    public function heartbeat(): void
+    {
+        if (!$this->request()->isPost()) {
+            $this->json([
+                'success' => false,
+                'message' => 'Méthode non autorisée.',
+            ], 405);
+            return;
+        }
+
+        Csrf::assertRequest($this->request(), 'student.heartbeat');
+
+        SessionManager::enforceTimeout();
+        SessionManager::enforceIntegrity(false, true);
+
+        if (!SessionManager::check() || !SessionManager::isStudent()) {
+            $this->json([
+                'success' => false,
+                'message' => 'Session invalide.',
+            ], 401);
+            return;
+        }
+
+        $network = $this->networkComputerService->resolveAllowedComputerOrFail($this->request());
+
+        if (!(bool) ($network['success'] ?? false)) {
+            SessionManager::logout(true, true);
+
+            $this->json([
+                'success' => false,
+                'message' => (string) ($network['message'] ?? 'Poste non autorisé.'),
+                'network' => $network,
+            ], 403);
+            return;
+        }
+
+        $computerId = (int) ($network['computer_id'] ?? 0);
+        $ip = (string) ($network['ip'] ?? '');
+
+        $dbSession = SessionManager::currentDatabaseSession();
+
+        if ($dbSession === null) {
+            SessionManager::logout(true, true);
+
+            $this->json([
+                'success' => false,
+                'message' => 'Session applicative introuvable.',
+            ], 401);
+            return;
+        }
+
+        if ($computerId > 0 && !SessionManager::isCurrentSessionMatchingComputer($computerId, $ip)) {
+            SessionManager::logout(true, true);
+
+            $this->json([
+                'success' => false,
+                'message' => 'Le poste actuel ne correspond pas à la session autorisée.',
+            ], 403);
+            return;
+        }
+
+        SessionManager::touch(true);
+
+        $this->json([
+            'success' => true,
+            'message' => 'Heartbeat OK.',
+            'server_time' => date('Y-m-d H:i:s'),
+            'network' => [
+                'ip' => $ip,
+                'network_type' => (string) ($network['network_type'] ?? 'unknown'),
+                'computer' => $network['computer'] ?? null,
+            ],
         ]);
     }
 }
