@@ -46,6 +46,9 @@ if (!function_exists('render_admin_question_preview')) {
         return nl2br(e($text), false);
     }
 }
+
+$examId = (int) ($exam['id'] ?? 0);
+$allowPrint = !empty($exam['allow_print']);
 ?>
 <div class="container-fluid py-3">
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
@@ -53,7 +56,7 @@ if (!function_exists('render_admin_question_preview')) {
             <h1 class="h3 mb-1"><?= e($exam['title'] ?? 'Examen') ?></h1>
             <div class="text-muted small">
                 <span class="me-3"><strong>Code :</strong> <?= e($exam['code'] ?? '') ?></span>
-                <span class="me-3"><strong>ID :</strong> <?= (int) ($exam['id'] ?? 0) ?></span>
+                <span class="me-3"><strong>ID :</strong> <?= $examId ?></span>
                 <span class="me-3"><strong>Durée :</strong> <?= (int) ($exam['duration_minutes'] ?? 0) ?> min</span>
                 <span class="me-3"><strong>Questions :</strong> <?= (int) ($exam['questions_count'] ?? 0) ?></span>
                 <span class="me-3"><strong>Participants :</strong> <?= (int) ($exam['participants_count'] ?? 0) ?></span>
@@ -68,7 +71,7 @@ if (!function_exists('render_admin_question_preview')) {
 
             <form action="<?= e(base_url('admin/exams/toggle-active')) ?>" method="post" class="d-inline">
                 <input type="hidden" name="_csrf" value="<?= e($csrf_exam_toggle) ?>">
-                <input type="hidden" name="exam_id" value="<?= (int) ($exam['id'] ?? 0) ?>">
+                <input type="hidden" name="exam_id" value="<?= $examId ?>">
                 <input type="hidden" name="value" value="<?= !empty($exam['is_active']) ? '0' : '1' ?>">
                 <button type="submit" class="btn btn-sm <?= !empty($exam['is_active']) ? 'btn-outline-danger' : 'btn-outline-success' ?>">
                     <i class="bi <?= !empty($exam['is_active']) ? 'bi-pause-circle' : 'bi-play-circle' ?>"></i>
@@ -78,11 +81,11 @@ if (!function_exists('render_admin_question_preview')) {
 
             <form action="<?= e(base_url('admin/exams/toggle-print')) ?>" method="post" class="d-inline">
                 <input type="hidden" name="_csrf" value="<?= e($csrf_exam_toggle) ?>">
-                <input type="hidden" name="exam_id" value="<?= (int) ($exam['id'] ?? 0) ?>">
-                <input type="hidden" name="value" value="<?= !empty($exam['allow_print']) ? '0' : '1' ?>">
-                <button type="submit" class="btn btn-sm <?= !empty($exam['allow_print']) ? 'btn-outline-warning' : 'btn-outline-primary' ?>">
-                    <i class="bi <?= !empty($exam['allow_print']) ? 'bi-printer-fill' : 'bi-printer' ?>"></i>
-                    <?= !empty($exam['allow_print']) ? 'Interdire impression' : 'Autoriser impression' ?>
+                <input type="hidden" name="exam_id" value="<?= $examId ?>">
+                <input type="hidden" name="value" value="<?= $allowPrint ? '0' : '1' ?>">
+                <button type="submit" class="btn btn-sm <?= $allowPrint ? 'btn-outline-warning' : 'btn-outline-primary' ?>">
+                    <i class="bi <?= $allowPrint ? 'bi-printer-fill' : 'bi-printer' ?>"></i>
+                    <?= $allowPrint ? 'Interdire impression' : 'Autoriser impression' ?>
                 </button>
             </form>
         </div>
@@ -113,7 +116,7 @@ if (!function_exists('render_admin_question_preview')) {
                             </div>
                             <div>
                                 <strong>Impression :</strong>
-                                <?php if (!empty($exam['allow_print'])): ?>
+                                <?php if ($allowPrint): ?>
                                     <span class="badge text-bg-primary">Autorisée</span>
                                 <?php else: ?>
                                     <span class="badge text-bg-secondary">Interdite</span>
@@ -169,7 +172,7 @@ if (!function_exists('render_admin_question_preview')) {
         <div class="card-body">
             <form action="<?= e(base_url('admin/exams/save-assignment')) ?>" method="post">
                 <input type="hidden" name="_csrf" value="<?= e($csrf_exam_assignment) ?>">
-                <input type="hidden" name="exam_id" value="<?= (int) ($exam['id'] ?? 0) ?>">
+                <input type="hidden" name="exam_id" value="<?= $examId ?>">
 
                 <div class="table-responsive">
                     <table class="table table-bordered table-striped table-sm align-middle mb-3">
@@ -321,7 +324,12 @@ if (!function_exists('render_admin_question_preview')) {
 
     <div class="card shadow-sm border-0 mb-3">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <h2 class="h6 mb-0">Génération des sujets</h2>
+            <div class="d-flex align-items-center gap-2">
+                <h2 class="h6 mb-0">Génération des sujets</h2>
+                <?php if ($allowPrint): ?>
+                    <span class="badge text-bg-primary">Impression autorisée</span>
+                <?php endif; ?>
+            </div>
             <span class="badge text-bg-light">
                 <?= (int) ($generationSummary['generated_user_exams'] ?? 0) ?> /
                 <?= (int) ($generationSummary['total_user_exams'] ?? 0) ?> générés
@@ -353,7 +361,7 @@ if (!function_exists('render_admin_question_preview')) {
                 <div class="col-12 col-xl-4">
                     <form action="<?= e(base_url('admin/exams/generate-subjects')) ?>" method="post" class="border rounded p-3 h-100">
                         <input type="hidden" name="_csrf" value="<?= e($csrf_exam_generate) ?>">
-                        <input type="hidden" name="exam_id" value="<?= (int) ($exam['id'] ?? 0) ?>">
+                        <input type="hidden" name="exam_id" value="<?= $examId ?>">
 
                         <div class="fw-semibold mb-2">Génération globale</div>
                         <div class="small text-muted mb-3">
@@ -370,11 +378,11 @@ if (!function_exists('render_admin_question_preview')) {
                 <div class="col-12 col-xl-4">
                     <form action="<?= e(base_url('admin/exams/generate-subjects')) ?>" method="post" class="border rounded p-3 h-100">
                         <input type="hidden" name="_csrf" value="<?= e($csrf_exam_generate) ?>">
-                        <input type="hidden" name="exam_id" value="<?= (int) ($exam['id'] ?? 0) ?>">
+                        <input type="hidden" name="exam_id" value="<?= $examId ?>">
 
-                        <div class="fw-semibold mb-2">Génération par classe</div>
+                        <div class="fw-semibold mb-2">Par classe</div>
 
-                        <select name="class_id" class="form-select form-select-sm mb-3" required>
+                        <select id="generation_class_id" name="class_id" class="form-select form-select-sm mb-3" required>
                             <option value="">Choisir une classe</option>
                             <?php foreach ($generationClasses as $classInfo): ?>
                                 <option value="<?= (int) ($classInfo['class_id'] ?? 0) ?>">
@@ -384,17 +392,36 @@ if (!function_exists('render_admin_question_preview')) {
                             <?php endforeach; ?>
                         </select>
 
-                        <button type="submit" class="btn btn-outline-primary btn-sm">
-                            <i class="bi bi-collection"></i>
-                            Générer classe
-                        </button>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="submit" class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-collection"></i>
+                                Générer
+                            </button>
+
+                            <?php if ($allowPrint): ?>
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-secondary btn-sm"
+                                    onclick="printExamCopiesByClass(<?= $examId ?>)"
+                                >
+                                    <i class="bi bi-printer"></i>
+                                    Imprimer
+                                </button>
+                            <?php endif; ?>
+                        </div>
+
+                        <?php if ($allowPrint): ?>
+                            <div class="small text-muted mt-3">
+                                L’impression de masse est limitée à une seule classe à la fois.
+                            </div>
+                        <?php endif; ?>
                     </form>
                 </div>
 
                 <div class="col-12 col-xl-4">
                     <form action="<?= e(base_url('admin/exams/regenerate-student')) ?>" method="post" class="border rounded p-3 h-100">
                         <input type="hidden" name="_csrf" value="<?= e($csrf_exam_generate) ?>">
-                        <input type="hidden" name="exam_id" value="<?= (int) ($exam['id'] ?? 0) ?>">
+                        <input type="hidden" name="exam_id" value="<?= $examId ?>">
 
                         <div class="fw-semibold mb-2">Sujet élève</div>
 
@@ -422,7 +449,7 @@ if (!function_exists('render_admin_question_preview')) {
         <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
             <h2 class="h6 mb-0">Résultats</h2>
 
-            <form method="get" action="<?= e(base_url('admin/exams/' . (int) ($exam['id'] ?? 0))) ?>" class="d-flex gap-2">
+            <form method="get" action="<?= e(base_url('admin/exams/' . $examId)) ?>" class="d-flex gap-2">
                 <select name="class_id" class="form-select form-select-sm">
                     <option value="0">Toutes les classes</option>
                     <?php foreach ($classes as $class): ?>
@@ -464,10 +491,12 @@ if (!function_exists('render_admin_question_preview')) {
                                 <th>Note</th>
                                 <th>Début</th>
                                 <th>Fin</th>
+                                <th>Impression</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php foreach ($results as $index => $result): ?>
+                                <?php $userExamId = (int) ($result['user_exam_id'] ?? 0); ?>
                                 <tr>
                                     <td><?= $index + 1 ?></td>
                                     <td><?= e($result['code_massar'] ?? '') ?></td>
@@ -487,6 +516,20 @@ if (!function_exists('render_admin_question_preview')) {
                                     <td class="text-end fw-semibold"><?= e(number_format((float) ($result['final_score'] ?? 0), 2, '.', '')) ?></td>
                                     <td class="small"><?= e($result['started_at'] ?? '') ?></td>
                                     <td class="small"><?= e($result['submitted_at'] ?? '') ?></td>
+                                    <td class="text-center">
+                                        <?php if ($allowPrint && $userExamId > 0): ?>
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm btn-outline-secondary"
+                                                onclick="window.open('<?= e(base_url('admin/exams/' . $examId . '/student/' . $userExamId . '/print')) ?>', '_blank')"
+                                                title="Imprimer la copie"
+                                            >
+                                                <i class="bi bi-printer"></i>
+                                            </button>
+                                        <?php else: ?>
+                                            <span class="text-muted">—</span>
+                                        <?php endif; ?>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
@@ -496,3 +539,25 @@ if (!function_exists('render_admin_question_preview')) {
         </div>
     </div>
 </div>
+
+<script>
+function printExamCopiesByClass(examId) {
+    const select = document.getElementById('generation_class_id');
+
+    if (!select) {
+        alert('Sélecteur de classe introuvable.');
+        return;
+    }
+
+    const classId = select.value;
+
+    if (!classId) {
+        alert('Choisir une classe.');
+        select.focus();
+        return;
+    }
+
+    const url = '<?= e(base_url('admin/exams')) ?>/' + examId + '/print-all?class_id=' + encodeURIComponent(classId);
+    window.open(url, '_blank');
+}
+</script>

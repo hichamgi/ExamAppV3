@@ -13,6 +13,7 @@ use App\Controllers\AdminComputerController;
 use App\Controllers\AdminExamController;
 use App\Controllers\AdminMonitoringController;
 use App\Controllers\AdminStudentController;
+use App\Controllers\AdminExamPrintController;
 
 final class App
 {
@@ -254,6 +255,10 @@ final class App
         $router->post('/admin/monitoring/block-student', [AdminMonitoringController::class, 'blockStudent']);
         $router->post('/admin/monitoring/mark-cheat', [AdminMonitoringController::class, 'markCheat']);
         $router->post('/admin/monitoring/force-logout-ip', [AdminMonitoringController::class, 'forceLogoutIp']);
+
+        $router->get('/admin/exams/{id}/print-tickets', [AdminExamPrintController::class, 'printTickets']);
+        $router->get('/admin/exams/{id}/student/{user_exam_id}/print', [AdminExamPrintController::class, 'printStudent']);
+        $router->get('/admin/exams/{id}/print-all', [AdminExamPrintController::class, 'printAll']);
 
         $router->get('/health', function (): void {
             header('Content-Type: application/json; charset=UTF-8');
