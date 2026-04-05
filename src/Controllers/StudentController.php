@@ -1244,15 +1244,39 @@ final class StudentController extends Controller
 
         $user = SessionManager::get('user');
 
+        if (!$user) {
+            return $this->json(['success' => false], 401);
+        }
+
         $data = $this->request->json();
+
+        $token = $data['attempt_token'] ?? null;
+        $answers = $data['answers'] ?? [];
+
+        if (!$token || !is_array($answers)) {
+            return $this->json(['success' => false]);
+        }
 
         $service = new ExamAttemptService();
         $answerService = new ExamAnswerService();
 
+        $attempt = $service->validateAttempt($token, $user['id']);
+
+        if (!$attempt) {
+            return $this->json(['success' => false]);
+        }
+
+        // 🔥 RATE LIMIT (anti spam réseau)
+        if (!empty($attempt['last_sync_at'])) {
+            if (time() - strtotime($attempt['last_sync_at']) < 2) {
+                return $this->json(['success' => true]);
+            }
+        }
+
         $ok = $service->sync(
-            $data['attempt_token'],
+            $token,
             $user['id'],
-            $data['answers'] ?? [],
+            $answers,
             $answerService
         );
 
@@ -1268,14 +1292,25 @@ final class StudentController extends Controller
 
         $user = SessionManager::get('user');
 
+        if (!$user) {
+            return $this->json(['success' => false], 401);
+        }
+
         $data = $this->request->json();
+
+        $token = $data['attempt_token'] ?? null;
+        $snapshot = $data['snapshot'] ?? null;
+
+        if (!$token || !is_array($snapshot)) {
+            return $this->json(['success' => false]);
+        }
 
         $service = new ExamAttemptService();
 
         $ok = $service->submitFinal(
-            $data['attempt_token'],
+            $token,
             $user['id'],
-            $data['snapshot']
+            $snapshot
         );
 
         return $this->json(['success' => $ok]);

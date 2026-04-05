@@ -21,8 +21,8 @@ class ExamAttemptService
         $endsAt = $now->modify("+{$durationMinutes} minutes");
 
         $sql = "INSERT INTO exam_attempts 
-            (attempt_token, user_id, class_id, exam_id, started_at, ends_at)
-            VALUES (:token, :user_id, :class_id, :exam_id, :started_at, :ends_at)";
+            (attempt_token, user_id, class_id, exam_id, started_at, ends_at, session_token)
+            VALUES (:token, :user_id, :class_id, :exam_id, :started_at, :ends_at, :session_token)";
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
@@ -31,7 +31,8 @@ class ExamAttemptService
             ':class_id' => $classId,
             ':exam_id' => $examId,
             ':started_at' => $now->format('Y-m-d H:i:s'),
-            ':ends_at' => $endsAt->format('Y-m-d H:i:s')
+            ':ends_at' => $endsAt->format('Y-m-d H:i:s'),
+            ':session_token' => SessionManager::get('session_token')
         ]);
 
         return [
@@ -58,6 +59,10 @@ class ExamAttemptService
         $attempt = $stmt->fetch();
 
         if (!$attempt) return null;
+
+        if ($attempt['session_token'] !== SessionManager::get('session_token')) {
+            return null;
+        }
 
         if ($attempt['status'] === 'submitted' || $attempt['status'] === 'expired') {
             return null;
@@ -124,7 +129,12 @@ class ExamAttemptService
 
         if ($finalizedAt > $endsAt) return false;
         if ($now > $graceLimit) return false;
-
+        
+        // limite taille answers
+        if (count($snapshot['answers']) > 200) {
+            return false;
+        }
+        
         // hash anti-triche
         $serverHash = hash('sha256', json_encode($snapshot['answers']));
         if (($snapshot['hash'] ?? '') !== $serverHash) {

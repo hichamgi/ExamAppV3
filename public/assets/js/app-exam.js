@@ -1,6 +1,12 @@
 const attemptToken = window.ATTEMPT_TOKEN;
-
 const storageKey = `exam_draft:${attemptToken}`;
+
+// ===== CLEAN LOCAL STORAGE ON LOAD =====
+Object.keys(localStorage).forEach(k => {
+    if (k.startsWith('exam_draft:') && k !== storageKey) {
+        localStorage.removeItem(k);
+    }
+});
 
 function saveLocal(answers) {
     const data = {
@@ -18,6 +24,7 @@ function loadLocal() {
     return raw ? JSON.parse(raw) : null;
 }
 
+// ===== AUTO SYNC =====
 setInterval(() => {
     const data = loadLocal();
     if (!data || data.locked) return;
@@ -43,15 +50,19 @@ setInterval(() => {
 
 }, 5000);
 
+// ===== FINAL SUBMIT =====
 function finalizeExam() {
     let data = loadLocal();
+
+    if (!data) return;
 
     data.locked = true;
     data.finalized_at_client = new Date().toISOString();
 
-    localStorage.setItem(storageKey, JSON.stringify(data));
-    
+    // 🔥 HASH ANTI-TAMPER
     data.hash = sha256(JSON.stringify(data.answers));
+
+    localStorage.setItem(storageKey, JSON.stringify(data));
 
     sendFinal(data);
 }
@@ -73,6 +84,8 @@ function sendFinal(data) {
     .then(res => {
         if (res.success) {
             console.log('SUBMITTED');
+
+            // 🔥 CLEAN AFTER SUCCESS
             localStorage.removeItem(storageKey);
         } else {
             retrySend(data);

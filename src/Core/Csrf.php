@@ -24,7 +24,9 @@ final class Csrf
             return (string) $_SESSION[self::SESSION_KEY][$context]['value'];
         }
 
-        $token = bin2hex(random_bytes(32));
+        $token = $request->input('_csrf')
+            ?? ($request->json()['_csrf'] ?? null)
+            ?? $request->header('X-CSRF-Token');
 
         $_SESSION[self::SESSION_KEY][$context] = [
             'value' => $token,

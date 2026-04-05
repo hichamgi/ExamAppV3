@@ -339,6 +339,10 @@ final class Request
 
     public function json(): array
     {
+        if (strlen($this->rawBody) > 100000) {
+            return [];
+        }
+
         if ($this->jsonBody !== null) {
             return $this->jsonBody;
         }

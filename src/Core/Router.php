@@ -6,6 +6,8 @@ namespace App\Core;
 
 use Closure;
 use RuntimeException;
+use App\Core\SecurityMiddleware;
+use App\Core\Request;
 
 final class Router
 {
@@ -61,6 +63,11 @@ final class Router
             }
 
             $params = $this->extractParams($matches, $route['paramNames']);
+
+            // SECURITY
+            $request = new Request();
+            SecurityMiddleware::handle($request);
+
             $response = $this->invokeHandler($route['handler'], $params);
 
             if ($response !== null) {
