@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Hôte : localhost:3306
--- Généré le : dim. 05 avr. 2026 à 04:23
+-- Généré le : dim. 05 avr. 2026 à 20:23
 -- Version du serveur : 11.8.3-MariaDB-0+deb13u1 from Debian
 -- Version de PHP : 8.4.16
 
@@ -94,6 +94,7 @@ CREATE TABLE `exam_attempts` (
   `status` enum('in_progress','pending_sync','finalizing_offline','submitted','expired') NOT NULL DEFAULT 'in_progress',
   `last_sync_at` datetime DEFAULT NULL,
   `submitted_at` datetime DEFAULT NULL,
+  `locked_at` datetime DEFAULT NULL,
   `snapshot` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`snapshot`)),
   `created_at` datetime DEFAULT current_timestamp(),
   `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
