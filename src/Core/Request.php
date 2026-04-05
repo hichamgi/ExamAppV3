@@ -343,14 +343,17 @@ final class Request
             return $this->jsonBody;
         }
 
-        $contentType = strtolower((string) $this->header('Content-Type', ''));
-
-        if (!str_contains($contentType, 'application/json') && trim($this->rawBody) === '') {
+        if (trim($this->rawBody) === '') {
             $this->jsonBody = [];
             return $this->jsonBody;
         }
 
         $decoded = json_decode($this->rawBody, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $this->jsonBody = [];
+            return $this->jsonBody;
+        }
 
         $this->jsonBody = is_array($decoded) ? $decoded : [];
 
@@ -379,5 +382,5 @@ final class Request
         }
 
         return $headers;
-    }
+    }  
 }

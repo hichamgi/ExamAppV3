@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Core\Database;
-use App\Core\SessionManager;
 
 class ExamAttemptService
 {
@@ -22,8 +21,8 @@ class ExamAttemptService
         $endsAt = $now->modify("+{$durationMinutes} minutes");
 
         $sql = "INSERT INTO exam_attempts 
-            (attempt_token, user_id, class_id, exam_id, started_at, ends_at, status)
-            VALUES (:token, :user_id, :class_id, :exam_id, :started_at, :ends_at, 'in_progress')";
+            (attempt_token, user_id, class_id, exam_id, started_at, ends_at)
+            VALUES (:token, :user_id, :class_id, :exam_id, :started_at, :ends_at)";
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
@@ -58,23 +57,23 @@ class ExamAttemptService
 
         $attempt = $stmt->fetch();
 
-        if (!$attempt) {
+        if (!$attempt) return null;
+
+        if ($attempt['status'] === 'submitted' || $attempt['status'] === 'expired') {
             return null;
         }
 
-        if ($attempt['status'] === 'submitted' || $attempt['status'] === 'expired') {
+        if ($attempt['locked_at'] !== null) {
             return null;
         }
 
         return $attempt;
     }
 
-    public function syncAnswers(string $token, int $userId, array $answers): bool
+    public function sync(string $token, int $userId, array $answers, ExamAnswerService $answerService): bool
     {
         $attempt = $this->validateAttempt($token, $userId);
-        if (!$attempt) {
-            return false;
-        }
+        if (!$attempt) return false;
 
         $now = new \DateTimeImmutable();
 
@@ -82,9 +81,19 @@ class ExamAttemptService
             return false;
         }
 
+        // Save draft answers
+        $answerService->saveDraft($token, $answers);
+
+        // Throttle (anti surcharge)
+        if (!empty($attempt['last_sync_at'])) {
+            $lastSync = new \DateTimeImmutable($attempt['last_sync_at']);
+            if ($now->getTimestamp() - $lastSync->getTimestamp() < 2) {
+                return true;
+            }
+        }
+
         $sql = "UPDATE exam_attempts 
-                SET last_sync_at = :sync_at,
-                    status = 'in_progress'
+                SET last_sync_at = :sync_at
                 WHERE attempt_token = :token";
 
         $stmt = $this->pdo->prepare($sql);
@@ -97,40 +106,44 @@ class ExamAttemptService
     public function submitFinal(string $token, int $userId, array $snapshot): bool
     {
         $attempt = $this->validateAttempt($token, $userId);
-        if (!$attempt) {
-            return false;
-        }
+        if (!$attempt) return false;
 
         if (($snapshot['locked'] ?? false) !== true) {
             return false;
         }
 
+        if ($attempt['status'] === 'submitted') {
+            return false;
+        }
+
         $finalizedAt = new \DateTimeImmutable($snapshot['finalized_at_client']);
         $endsAt = new \DateTimeImmutable($attempt['ends_at']);
-
-        // fenêtre de tolérance 3 min
         $graceLimit = $endsAt->modify('+3 minutes');
 
         $now = new \DateTimeImmutable();
 
-        if ($finalizedAt > $endsAt) {
-            return false;
-        }
+        if ($finalizedAt > $endsAt) return false;
+        if ($now > $graceLimit) return false;
 
-        if ($now > $graceLimit) {
+        // hash anti-triche
+        $serverHash = hash('sha256', json_encode($snapshot['answers']));
+        if (($snapshot['hash'] ?? '') !== $serverHash) {
             return false;
         }
 
         $sql = "UPDATE exam_attempts 
                 SET status = 'submitted',
                     snapshot = :snapshot,
-                    submitted_at = :submitted_at
+                    submitted_at = :submitted_at,
+                    locked_at = :locked_at
                 WHERE attempt_token = :token";
 
         $stmt = $this->pdo->prepare($sql);
+
         return $stmt->execute([
             ':snapshot' => json_encode($snapshot),
             ':submitted_at' => $now->format('Y-m-d H:i:s'),
+            ':locked_at' => $now->format('Y-m-d H:i:s'),
             ':token' => $token
         ]);
     }

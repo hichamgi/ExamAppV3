@@ -11,6 +11,9 @@ use App\Core\Database;
 use App\Core\SessionManager;
 use App\Services\AuthService;
 use App\Services\NetworkComputerService;
+use App\Services\ExamAttemptService;
+use App\Services\ExamAnswerService;   
+
 
 final class StudentController extends Controller
 {
@@ -1232,40 +1235,76 @@ final class StudentController extends Controller
         ];
     }
 
+    // =========================
+    // SYNC
+    // =========================
     public function sync()
     {
         Csrf::assertRequest($this->request);
 
         $user = SessionManager::get('user');
 
-        $token = $this->request->input('attempt_token');
-        $answers = $this->request->input('answers');
+        $data = $this->request->json();
 
         $service = new ExamAttemptService();
+        $answerService = new ExamAnswerService();
 
-        $ok = $service->syncAnswers($token, $user['id'], $answers);
+        $ok = $service->sync(
+            $data['attempt_token'],
+            $user['id'],
+            $data['answers'] ?? [],
+            $answerService
+        );
 
-        return $this->json([
-            'success' => $ok,
-            'server_time' => date('Y-m-d H:i:s')
-        ]);
+        return $this->json(['success' => $ok]);
     }
 
+    // =========================
+    // SUBMIT FINAL
+    // =========================
     public function submit()
     {
         Csrf::assertRequest($this->request);
 
         $user = SessionManager::get('user');
 
-        $token = $this->request->input('attempt_token');
-        $snapshot = $this->request->input('snapshot');
+        $data = $this->request->json();
 
         $service = new ExamAttemptService();
 
-        $ok = $service->submitFinal($token, $user['id'], $snapshot);
+        $ok = $service->submitFinal(
+            $data['attempt_token'],
+            $user['id'],
+            $data['snapshot']
+        );
+
+        return $this->json(['success' => $ok]);
+    }
+
+    // =========================
+    // RESTORE STATE
+    // =========================
+    public function state()
+    {
+        $user = SessionManager::get('user');
+
+        $token = $_GET['attempt_token'] ?? null;
+
+        $attemptService = new ExamAttemptService();
+        $answerService = new ExamAnswerService();
+
+        $attempt = $attemptService->validateAttempt($token, $user['id']);
+
+        if (!$attempt) {
+            return $this->json(['success' => false]);
+        }
+
+        $answers = $answerService->getDraft($token);
 
         return $this->json([
-            'success' => $ok
+            'success' => true,
+            'attempt' => $attempt,
+            'answers' => $answers
         ]);
     }
 }

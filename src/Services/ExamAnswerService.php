@@ -1,0 +1,58 @@
+<?php
+
+namespace App\Services;
+
+use App\Core\Database;
+
+class ExamAnswerService
+{
+    private \PDO $pdo;
+
+    public function __construct()
+    {
+        $this->pdo = Database::getConnection();
+    }
+
+    public function saveDraft(string $token, array $answers): void
+    {
+        $sql = "INSERT INTO user_answers_draft 
+            (attempt_token, question_id, answer_text, updated_at)
+            VALUES (:token, :question_id, :answer_text, :updated_at)
+            ON DUPLICATE KEY UPDATE
+                answer_text = VALUES(answer_text),
+                updated_at = VALUES(updated_at)";
+
+        $stmt = $this->pdo->prepare($sql);
+
+        $now = date('Y-m-d H:i:s');
+
+        foreach ($answers as $questionId => $answer) {
+            $stmt->execute([
+                ':token' => $token,
+                ':question_id' => (int)$questionId,
+                ':answer_text' => (string)$answer,
+                ':updated_at' => $now
+            ]);
+        }
+    }
+
+    public function getDraft(string $token): array
+    {
+        $sql = "SELECT question_id, answer_text 
+                FROM user_answers_draft 
+                WHERE attempt_token = :token";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':token' => $token]);
+
+        $rows = $stmt->fetchAll();
+
+        $result = [];
+
+        foreach ($rows as $row) {
+            $result[$row['question_id']] = $row['answer_text'];
+        }
+
+        return $result;
+    }
+}
