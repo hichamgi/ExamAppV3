@@ -5,58 +5,82 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\Controller;
-use App\Core\Database;
+use App\Core\SessionManager;
+use App\Services\AuthService;
 use App\Services\ExamPrintService;
 
 class AdminExamPrintController extends Controller
 {
     private ExamPrintService $service;
+    private AuthService $authService;
 
     public function __construct()
     {
         parent::__construct();
 
-        // Adapte ici selon ta classe Database :
-        // $pdo = Database::connection();
-        // $pdo = Database::getConnection();
-        $pdo = Database::pdo();
-
-        $this->service = new ExamPrintService($pdo);
+        $this->service = new ExamPrintService();
+        $this->authService = new AuthService();
     }
 
-    public function printTickets(int $id): void
+    public function printTickets(string $id): void
     {
-        $tickets = $this->service->getTicketsByExam($id);
+        $this->guardAdmin();
 
-        $this->view('admin/exams/print/tickets', [
-            'exam_id' => $id,
-            'tickets' => $tickets,
-        ]);
+        $examId = (int) $id;
+
+        $this->render('admin.exams.print.tickets', [
+            'title' => 'Impression tickets',
+            'exam_id' => $examId,
+            'tickets' => $this->service->getTicketsByExam($examId),
+        ], null);
     }
 
-    public function printStudent(int $id, int $user_exam_id): void
+    public function printStudent(string $id, string $user_exam_id): void
     {
-        $data = $this->service->getStudentCopy($user_exam_id);
+        $this->guardAdmin();
 
-        $this->view('admin/exams/print/student_copy', $data);
+        $examId = (int) $id;
+        $userExamId = (int) $user_exam_id;
+        $data = $this->service->getStudentCopy($userExamId);
+
+        $this->render('admin.exams.print.student_copy', [
+            'title' => 'Impression copie élève',
+            'exam_id' => $examId,
+            'student' => $data['student'],
+            'questions' => $data['questions'],
+        ], null);
     }
 
-    public function printAll(int $id): void
+    public function printAll(string $id): void
     {
+        $this->guardAdmin();
+
+        $examId = (int) $id;
         $classId = (int) ($_GET['class_id'] ?? 0);
 
         if ($classId <= 0) {
-            http_response_code(400);
-            echo 'class_id obligatoire';
+            $this->abort(400, 'class_id obligatoire');
             return;
         }
 
-        $copies = $this->service->getAllCopies($id, $classId);
-
-        $this->view('admin/exams/print/all_copies', [
-            'exam_id' => $id,
+        $this->render('admin.exams.print.all_copies', [
+            'title' => 'Impression copies',
+            'exam_id' => $examId,
             'class_id' => $classId,
-            'copies' => $copies,
-        ]);
+            'copies' => $this->service->getAllCopies($examId, $classId),
+        ], null);
+    }
+
+    private function guardAdmin(): void
+    {
+        SessionManager::enforceTimeout();
+        SessionManager::enforceIntegrity(false, true);
+
+        if (!SessionManager::check() || !SessionManager::isAdmin()) {
+            $this->redirect(base_url('login'));
+            exit;
+        }
+
+        $this->authService->refreshAuthenticatedSession(false);
     }
 }

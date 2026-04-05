@@ -972,11 +972,41 @@ final class QuestionRendererService
 
     private function buildCorrectAnswerText(array $snapshot): string
     {
-        if (($snapshot['type'] ?? '') === self::TYPE_INPUTS && isset($snapshot['expected']) && is_array($snapshot['expected'])) {
+        $type = $snapshot['type'] ?? '';
+
+        if ($type === self::TYPE_INPUTS && isset($snapshot['expected']) && is_array($snapshot['expected'])) {
             return json_encode(
                 array_values($snapshot['expected']),
                 JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
             ) ?: '';
+        }
+
+        if ($type === self::TYPE_INPUT) {
+            $expectedText = $this->normalizeString($snapshot['expected_text'] ?? '');
+
+            if ($expectedText !== '') {
+                return $expectedText;
+            }
+
+            $expectedAny = $snapshot['expected_any'] ?? [];
+            if (is_array($expectedAny) && $expectedAny !== []) {
+                $values = array_values(array_filter(
+                    array_map(fn($item): string => $this->normalizeString($item), $expectedAny),
+                    fn(string $item): bool => $item !== ''
+                ));
+
+                return implode(' | ', $values);
+            }
+
+            $expectedItems = $snapshot['expected_items'] ?? [];
+            if (is_array($expectedItems) && $expectedItems !== []) {
+                $values = array_values(array_filter(
+                    array_map(fn($item): string => $this->normalizeString($item), $expectedItems),
+                    fn(string $item): bool => $item !== ''
+                ));
+
+                return implode(' | ', $values);
+            }
         }
 
         $correctAnswers = [];
