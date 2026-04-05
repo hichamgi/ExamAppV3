@@ -53,6 +53,7 @@ final class AdminController extends Controller
             'csrf_force_logout' => Csrf::token('admin.force-logout'),
             'csrf_alert_update' => Csrf::token('admin.alert-update'),
             'csrf_disable_student' => Csrf::token('admin.disable-student'),
+            'csrf_heartbeat' => \App\Core\Csrf::token('admin.heartbeat'),
         ], 'layouts.main');
     }
 
@@ -409,5 +410,54 @@ final class AdminController extends Controller
             'started_at' => (string) ($row['started_at'] ?? ''),
             'last_activity_at' => (string) ($row['last_activity_at'] ?? ''),
         ];
+    }
+
+    public function heartbeat(): void
+    {
+        if (!$this->request()->isPost()) {
+            $this->json([
+                'success' => false,
+                'message' => 'Méthode non autorisée.',
+            ], 405);
+            return;
+        }
+
+        Csrf::assertRequest($this->request(), 'admin.heartbeat');
+
+        SessionManager::enforceTimeout();
+        SessionManager::enforceIntegrity(false, true);
+
+        if (!SessionManager::check() || !SessionManager::isAdmin()) {
+            $this->json([
+                'success' => false,
+                'message' => 'Session invalide.',
+            ], 401);
+            return;
+        }
+
+        $dbSession = SessionManager::currentDatabaseSession();
+
+        if ($dbSession === null) {
+            SessionManager::logout(true, true);
+
+            $this->json([
+                'success' => false,
+                'message' => 'Session applicative introuvable.',
+            ], 401);
+            return;
+        }
+
+        SessionManager::touch(true);
+
+        $this->json([
+            'success' => true,
+            'message' => 'Heartbeat admin OK.',
+            'server_time' => date('Y-m-d H:i:s'),
+            'session' => [
+                'session_id' => (int) ($dbSession['id'] ?? 0),
+                'ip' => (string) ($dbSession['ip_address'] ?? ''),
+                'network_type' => (string) ($dbSession['network_type'] ?? 'unknown'),
+            ],
+        ]);
     }
 }

@@ -115,6 +115,10 @@
             return;
         }
 
+        if (!window.ExamAppPage.debug) {
+            return;
+        }
+
         var statusBox = document.getElementById('student-heartbeat-status');
         var url = window.ExamAppPage.heartbeatUrl;
         var csrf = window.ExamAppPage.csrfHeartbeat;
@@ -155,6 +159,55 @@
         setInterval(ping, 30000);
     }
 
+    async function runAdminHeartbeat() {
+        if (!window.ExamAppPage || window.ExamAppPage.type !== 'admin-dashboard') {
+            return;
+        }
+
+        var statusBox = document.getElementById('admin-heartbeat-status');
+        var url = window.ExamAppPage.heartbeatUrl;
+        var csrf = window.ExamAppPage.csrfHeartbeat;
+
+        if (!url || !csrf) {
+            if (statusBox) {
+                statusBox.className = 'small text-warning';
+                statusBox.textContent = 'Configuration heartbeat admin manquante.';
+            }
+            return;
+        }
+
+        async function ping() {
+            try {
+                var formData = new FormData();
+                formData.append('_csrf', csrf);
+
+                var response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    },
+                    body: formData
+                });
+
+                var data = await response.json();
+
+                if (statusBox) {
+                    statusBox.className = response.ok ? 'small text-success' : 'small text-danger';
+                    statusBox.textContent = data.message || (response.ok ? 'Heartbeat admin OK' : 'Erreur heartbeat admin');
+                }
+            } catch (error) {
+                if (statusBox) {
+                    statusBox.className = 'small text-danger';
+                    statusBox.textContent = 'Erreur de communication admin.';
+                }
+            }
+        }
+
+        ping();
+        setInterval(ping, 30000);
+    }
+
     function escapeHtml(value) {
         return String(value)
             .replaceAll('&', '&amp;')
@@ -168,6 +221,8 @@
         togglePasswordVisibility();
         loadAdminDashboardData();
         runStudentHeartbeat();
+        runAdminHeartbeat();
+        
         const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
 
         tooltipTriggerList.forEach(el => {

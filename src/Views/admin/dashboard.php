@@ -76,6 +76,9 @@ $admin = $admin ?? [];
                 <div id="admin-alerts">
                     <div class="text-secondary">Chargement...</div>
                 </div>
+                <div id="admin-heartbeat-status" class="small text-secondary">
+                    Vérification session admin...
+                </div>
             </div>
         </div>
     </div>
@@ -83,6 +86,8 @@ $admin = $admin ?? [];
 
 <script>
 window.ExamAppPage = {
-    type: 'admin-dashboard'
+    type: 'admin-dashboard',
+    heartbeatUrl: '<?= e(rtrim((string) \App\Core\Config::get('app.base_url', ''), '/') . '/api/admin/heartbeat') ?>',
+    csrfHeartbeat: '<?= e((string) ($csrf_heartbeat ?? '')) ?>'
 };
 </script>

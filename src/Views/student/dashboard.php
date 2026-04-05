@@ -14,7 +14,11 @@ $showDebugCorrection = (bool) \App\Core\Config::get('app.exam.debug_student_corr
 ?>
 
 <div class="row g-4">
+    <?php if ((bool) \App\Core\Config::get('app.debug', false)): ?>
     <div class="col-lg-8">
+    <?php else: ?>
+    <div class="col-lg-12">
+    <?php endif; ?>
         <div class="hero-card p-4 p-lg-5 h-100">
             <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
                 <div>
@@ -60,29 +64,34 @@ $showDebugCorrection = (bool) \App\Core\Config::get('app.exam.debug_student_corr
             </div>
         </div>
     </div>
+    <?php if ((bool) \App\Core\Config::get('app.debug', false)): ?>
+        <div class="col-lg-4">
+            <div class="app-card h-100">
+                <div class="card-body">
+                    <h2 class="h5 mb-3">État de session</h2>
 
-    <div class="col-lg-4">
-        <div class="app-card h-100">
-            <div class="card-body">
-                <h2 class="h5 mb-3">État de session</h2>
+                    <div class="status-line mb-3">
+                        <span class="status-dot status-dot-success"></span>
+                        <span>Session active</span>
+                    </div>
 
-                <div class="status-line mb-3">
-                    <span class="status-dot status-dot-success"></span>
-                    <span>Session active</span>
+                    <div class="small text-secondary mb-2">IP actuelle</div>
+                    <div class="fw-semibold mb-3"><?= e((string) ($network['ip'] ?? '')) ?></div>
+
+                    <div class="small text-secondary mb-2">Hostname</div>
+                    <div class="fw-semibold"><?= e((string) ($computer['hostname'] ?? '')) ?></div>
                 </div>
-
-                <div class="small text-secondary mb-2">IP actuelle</div>
-                <div class="fw-semibold mb-3"><?= e((string) ($network['ip'] ?? '')) ?></div>
-
-                <div class="small text-secondary mb-2">Hostname</div>
-                <div class="fw-semibold"><?= e((string) ($computer['hostname'] ?? '')) ?></div>
             </div>
         </div>
-    </div>
+    <?php endif; ?>
 </div>
 
 <div class="row g-4 mt-1">
+    <?php if ((bool) \App\Core\Config::get('app.debug', false)): ?>
     <div class="col-lg-8">
+    <?php else: ?>
+    <div class="col-lg-12">
+    <?php endif; ?>
         <div class="app-card mb-4">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
@@ -111,7 +120,7 @@ $showDebugCorrection = (bool) \App\Core\Config::get('app.exam.debug_student_corr
 
                                     <div class="d-flex align-items-center">
                                         <a href="<?= e(base_url('student/exam?user_exam_id=' . (int) ($exam['user_exam_id'] ?? 0))) ?>" class="btn btn-danger">
-                                            <i class="bi bi-play-circle me-2"></i>Commencer / reprendre
+                                            <i class="bi bi-play-circle me-2"></i> Commencer
                                         </a>
                                     </div>
                                 </div>
@@ -305,26 +314,29 @@ $showDebugCorrection = (bool) \App\Core\Config::get('app.exam.debug_student_corr
         </div>
     </div>
 
-    <div class="col-lg-4">
-        <div class="app-card">
-            <div class="card-body">
-                <h2 class="h5 mb-3">Synchronisation</h2>
-                <p class="text-secondary small mb-3">
-                    La page peut envoyer un heartbeat léger pour maintenir la session active côté serveur.
-                </p>
+    <?php if ((bool) \App\Core\Config::get('app.debug', false)): ?>
+        <div class="col-lg-4">
+            <div class="app-card">
+                <div class="card-body">
+                    <h2 class="h5 mb-3">Synchronisation</h2>
+                    <p class="text-secondary small mb-3">
+                        La page peut envoyer un heartbeat léger pour maintenir la session active côté serveur.
+                    </p>
 
-                <div id="student-heartbeat-status" class="small text-success">
-                    Prêt
+                    <div id="student-heartbeat-status" class="small text-success">
+                        Prêt
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
+    <?php endif; ?>
 </div>
 
 <script>
 window.ExamAppPage = {
     type: 'student-dashboard',
     heartbeatUrl: '<?= e(rtrim((string) \App\Core\Config::get('app.base_url', ''), '/') . '/api/student/heartbeat') ?>',
+    debug: <?= \App\Core\Config::get('app.debug', false) ? 'true' : 'false' ?>,
     csrfHeartbeat: '<?= e((string) ($csrf_heartbeat ?? '')) ?>'
 };
 </script>

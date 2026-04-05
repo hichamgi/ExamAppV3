@@ -441,7 +441,8 @@ window.ExamAppPage = {
     stateUrl: '<?= e((string) ($exam_state_url ?? '')) ?>',
     dashboardUrl: '<?= e(base_url('student/dashboard')) ?>',
     csrfSync: '<?= e((string) ($csrf_exam_sync ?? '')) ?>',
-    csrfSubmit: '<?= e((string) ($csrf_exam_submit ?? '')) ?>'
+    csrfSubmit: '<?= e((string) ($csrf_exam_submit ?? '')) ?>',
+    debug: <?= \App\Core\Config::get('app.debug', false) ? 'true' : 'false' ?>
 };
 </script>
 <script src="<?= e(asset_url('js/app-exam.js')) ?>"></script>
