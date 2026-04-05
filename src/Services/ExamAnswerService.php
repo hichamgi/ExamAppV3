@@ -26,7 +26,23 @@ class ExamAnswerService
 
         $now = date('Y-m-d H:i:s');
 
+        $stmtCheck = $this->pdo->prepare("
+            SELECT id FROM questions WHERE id = :id LIMIT 1
+        ");
+
         foreach ($answers as $questionId => $answer) {
+
+            // validation type
+            if (!is_scalar($answer) && !is_null($answer)) {
+                continue;
+            }
+
+            // validation question_id
+            $stmtCheck->execute([':id' => (int)$questionId]);
+            if (!$stmtCheck->fetch()) {
+                continue;
+            }
+
             $stmt->execute([
                 ':token' => $token,
                 ':question_id' => (int)$questionId,
