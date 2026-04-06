@@ -101,11 +101,19 @@ $displayName = is_array($auth) ? (string) ($auth['display_name'] ?? '') : '';
 
                 <div class="d-flex align-items-center gap-2">
                     <?php if ($loggedIn): ?>
+                        <?php if ($isAdmin): ?>
+                            <span
+                                id="admin-heartbeat-badge"
+                                class="badge rounded-pill border border-secondary text-secondary bg-white px-3 py-2"
+                                title="Heartbeat admin"
+                            >
+                                <i class="bi bi-heart-pulse-fill me-1"></i>
+                            </span>
+                        <?php endif; ?>
                         <span class="badge rounded-pill text-bg-light border px-3 py-2">
                             <i class="bi bi-person-circle me-1"></i>
                             <?= e($displayName !== '' ? $displayName : 'Utilisateur connecté') ?>
                         </span>
-
                         <form method="POST" action="<?= e(base_url('logout')) ?>" class="d-inline">
                             <?= \App\Core\Csrf::input('auth.logout') ?>
                             <button type="submit" class="btn btn-danger btn-sm">
@@ -121,4 +129,14 @@ $displayName = is_array($auth) ? (string) ($auth['display_name'] ?? '') : '';
             </div>
         </div>
     </nav>
+   <?php if ($isAdmin): ?>
+        <script>
+        window.ExamAppPage = Object.assign({}, window.ExamAppPage || {}, {
+            type: <?= json_encode((isset($pageType) && is_string($pageType) ? $pageType : 'admin-page')) ?>,
+            isAdmin: true,
+            heartbeatUrl: <?= json_encode(base_url('api/admin/heartbeat')) ?>,
+            csrfHeartbeat: <?= json_encode(\App\Core\Csrf::token('admin.heartbeat')) ?>
+        });
+        </script>
+    <?php endif; ?>
 </header>

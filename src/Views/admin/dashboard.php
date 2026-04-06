@@ -76,18 +76,15 @@ $admin = $admin ?? [];
                 <div id="admin-alerts">
                     <div class="text-secondary">Chargement...</div>
                 </div>
-                <div id="admin-heartbeat-status" class="small text-secondary">
-                    Vérification session admin...
-                </div>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-window.ExamAppPage = {
+window.ExamAppPage = Object.assign({}, window.ExamAppPage || {}, {
     type: 'admin-dashboard',
     heartbeatUrl: '<?= e(rtrim((string) \App\Core\Config::get('app.base_url', ''), '/') . '/api/admin/heartbeat') ?>',
     csrfHeartbeat: '<?= e((string) ($csrf_heartbeat ?? '')) ?>'
-};
+});
 </script>

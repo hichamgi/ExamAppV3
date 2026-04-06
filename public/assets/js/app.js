@@ -34,17 +34,49 @@
         var alertsBox = document.getElementById('admin-alerts');
 
         try {
+            var sessionsUrl = baseUrl + '/api/admin/sessions';
+            var alertsUrl = baseUrl + '/api/admin/alerts';
+
             var [sessionsResponse, alertsResponse] = await Promise.all([
-                fetch((window.location.origin ? '' : '') + baseUrl + '/api/admin/sessions', {
-                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                fetch(sessionsUrl, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
                 }),
-                fetch((window.location.origin ? '' : '') + baseUrl + '/api/admin/alerts', {
-                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                fetch(alertsUrl, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
                 })
             ]);
 
-            var sessionsData = await sessionsResponse.json();
-            var alertsData = await alertsResponse.json();
+            var sessionsRaw = await sessionsResponse.text();
+            var alertsRaw = await alertsResponse.text();
+
+            var sessionsData;
+            var alertsData;
+
+            try {
+                sessionsData = JSON.parse(sessionsRaw);
+            } catch (e) {
+                throw new Error('Réponse sessions non JSON');
+            }
+
+            try {
+                alertsData = JSON.parse(alertsRaw);
+            } catch (e) {
+                throw new Error('Réponse alerts non JSON');
+            }
+
+            if (!sessionsResponse.ok) {
+                throw new Error('Erreur sessions HTTP ' + sessionsResponse.status);
+            }
+
+            if (!alertsResponse.ok) {
+                throw new Error('Erreur alerts HTTP ' + alertsResponse.status);
+            }
 
             if (sessionsBox) {
                 if (!sessionsData.items || !sessionsData.items.length) {
@@ -101,9 +133,12 @@
                 }
             }
         } catch (error) {
+            console.error('loadAdminDashboardData error:', error);
+
             if (sessionsBox) {
                 sessionsBox.innerHTML = '<div class="text-danger">Impossible de charger les sessions.</div>';
             }
+
             if (alertsBox) {
                 alertsBox.innerHTML = '<div class="text-danger">Impossible de charger les alertes.</div>';
             }
@@ -160,21 +195,50 @@
     }
 
     async function runAdminHeartbeat() {
-        if (!window.ExamAppPage || window.ExamAppPage.type !== 'admin-dashboard') {
+        var badge = document.getElementById('admin-heartbeat-badge');
+
+        if (!badge) {
             return;
         }
 
-        var statusBox = document.getElementById('admin-heartbeat-status');
+        function setBadgeState(state) {
+            var baseClass = 'badge rounded-pill bg-white px-2 py-2';
+
+            badge.classList.remove('heartbeat-ok');
+
+            switch (state) {
+                case 'ok':
+                    badge.className = baseClass + ' border border-success text-success';
+                    badge.title = 'Heartbeat admin OK';
+                    badge.classList.add('heartbeat-ok');
+                    break;
+
+                case 'error':
+                    badge.className = baseClass + ' border border-danger text-danger';
+                    badge.title = 'Erreur heartbeat admin';
+                    break;
+
+                case 'config':
+                    badge.className = baseClass + ' border border-warning text-warning';
+                    badge.title = 'Configuration heartbeat admin manquante';
+                    break;
+
+                default:
+                    badge.className = baseClass + ' border border-secondary text-secondary';
+                    badge.title = 'Heartbeat admin en attente';
+                    break;
+            }
+        }
+
+        setBadgeState('default');
+
+        if (!window.ExamAppPage || !window.ExamAppPage.heartbeatUrl || !window.ExamAppPage.csrfHeartbeat) {
+            setBadgeState('config');
+            return;
+        }
+
         var url = window.ExamAppPage.heartbeatUrl;
         var csrf = window.ExamAppPage.csrfHeartbeat;
-
-        if (!url || !csrf) {
-            if (statusBox) {
-                statusBox.className = 'small text-warning';
-                statusBox.textContent = 'Configuration heartbeat admin manquante.';
-            }
-            return;
-        }
 
         async function ping() {
             try {
@@ -190,21 +254,27 @@
                     body: formData
                 });
 
-                var data = await response.json();
+                var data = null;
 
-                if (statusBox) {
-                    statusBox.className = response.ok ? 'small text-success' : 'small text-danger';
-                    statusBox.textContent = data.message || (response.ok ? 'Heartbeat admin OK' : 'Erreur heartbeat admin');
+                try {
+                    data = await response.json();
+                } catch (jsonError) {
+                    data = null;
+                }
+
+                if (response.ok) {
+                    setBadgeState('ok');
+                } else {
+                    setBadgeState('error');
+                    console.error('Heartbeat admin HTTP error:', response.status, data);
                 }
             } catch (error) {
-                if (statusBox) {
-                    statusBox.className = 'small text-danger';
-                    statusBox.textContent = 'Erreur de communication admin.';
-                }
+                setBadgeState('error');
+                console.error('Heartbeat admin network error:', error);
             }
         }
 
-        ping();
+        await ping();
         setInterval(ping, 30000);
     }
 

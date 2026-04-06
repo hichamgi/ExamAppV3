@@ -234,6 +234,16 @@ body.app-body {
     text-align: center;
 }
 
+@keyframes heartbeatPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.12); }
+    100% { transform: scale(1); }
+}
+
+.heartbeat-ok i {
+    animation: heartbeatPulse 1.5s infinite;
+}
+
 @media (max-width: 991.98px) {
     .hero-card::after {
         width: 120px;
