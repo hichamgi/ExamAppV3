@@ -83,6 +83,17 @@
                     sessionsBox.innerHTML = '<div class="text-secondary">Aucune session active.</div>';
                 } else {
                     var rows = sessionsData.items.map(function (item) {
+
+                        var stateBadge = item.is_stale
+                            ? '<span class="badge text-bg-warning">Inactive</span>'
+                            : '<span class="badge text-bg-success">Active</span>';
+
+                        var actionBtn = item.is_stale
+                            ? `<button class="btn btn-sm btn-outline-danger js-force-logout" data-id="${item.id}">
+                                    <i class="bi bi-box-arrow-right"></i>
+                            </button>`
+                            : '';
+
                         return `
                             <tr>
                                 <td>${escapeHtml(item.student_name || '')}</td>
@@ -91,6 +102,8 @@
                                 <td>${escapeHtml(item.ip_address || '')}</td>
                                 <td>${escapeHtml(item.network_type || '')}</td>
                                 <td>${escapeHtml(item.last_activity_at || '')}</td>
+                                <td>${stateBadge}</td>
+                                <td>${actionBtn}</td>
                             </tr>
                         `;
                     }).join('');
@@ -105,11 +118,49 @@
                                     <th>IP</th>
                                     <th>Réseau</th>
                                     <th>Dernière activité</th>
+                                    <th>État</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>${rows}</tbody>
                         </table>
                     `;
+                    sessionsBox.querySelectorAll('.js-force-logout').forEach(function (btn) {
+                        btn.addEventListener('click', async function () {
+
+                            if (!confirm('Déconnecter cette session ?')) {
+                                return;
+                            }
+
+                            var sessionId = btn.getAttribute('data-id');
+
+                            try {
+                                var formData = new FormData();
+                                formData.append('_csrf', window.ExamAppPage.csrfForceLogout);
+                                formData.append('session_id', sessionId);
+
+                                var response = await fetch(baseUrl + '/api/admin/force-logout', {
+                                    method: 'POST',
+                                    headers: {
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                        'Accept': 'application/json'
+                                    },
+                                    body: formData
+                                });
+
+                                var data = await response.json();
+
+                                if (response.ok && data.success) {
+                                    loadAdminDashboardData(); // refresh
+                                } else {
+                                    alert(data.message || 'Erreur lors de la déconnexion.');
+                                }
+
+                            } catch (e) {
+                                alert('Erreur réseau.');
+                            }
+                        });
+                    });
                 }
             }
 

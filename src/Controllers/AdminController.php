@@ -17,6 +17,7 @@ final class AdminController extends Controller
     private AuthService $authService;
     private NetworkComputerService $networkComputerService;
     private AlertService $alertService;
+    private const ADMIN_STALE_MINUTES = 240;
 
     public function __construct()
     {
@@ -72,6 +73,12 @@ final class AdminController extends Controller
                 us.status,
                 us.started_at,
                 us.last_activity_at,
+                CASE
+                    WHEN r.code = 'admin'
+                        AND us.last_activity_at < (NOW() - INTERVAL " . self::ADMIN_STALE_MINUTES . " MINUTE)
+                    THEN 1
+                    ELSE 0
+                END AS is_stale,
                 u.numero,
                 u.code_massar,
                 u.nom,
@@ -81,13 +88,13 @@ final class AdminController extends Controller
                 lc.name AS computer_name,
                 lc.hostname,
                 lc.room_name
-             FROM user_sessions us
-             INNER JOIN users u ON u.id = us.user_id
-             INNER JOIN roles r ON r.id = u.role_id
-             LEFT JOIN classes c ON c.id = us.class_id
-             LEFT JOIN lab_computers lc ON lc.id = us.computer_id
-             WHERE us.status = 'active'
-             ORDER BY us.last_activity_at DESC"
+            FROM user_sessions us
+            INNER JOIN users u ON u.id = us.user_id
+            INNER JOIN roles r ON r.id = u.role_id
+            LEFT JOIN classes c ON c.id = us.class_id
+            LEFT JOIN lab_computers lc ON lc.id = us.computer_id
+            WHERE us.status = 'active'
+            ORDER BY us.last_activity_at DESC"
         );
 
         $items = array_map(fn(array $row): array => $this->normalizeActiveSession($row), $rows);
@@ -367,6 +374,7 @@ final class AdminController extends Controller
             'status' => (string) ($row['status'] ?? ''),
             'started_at' => (string) ($row['started_at'] ?? ''),
             'last_activity_at' => (string) ($row['last_activity_at'] ?? ''),
+            'is_stale' => !empty($row['is_stale']),
         ];
     }
 

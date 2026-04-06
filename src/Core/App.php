@@ -207,6 +207,8 @@ final class App
         $router->get('/api/admin/sessions', [AdminController::class, 'activeSessions']);
         $router->get('/api/admin/alerts', [AdminController::class, 'loginAlerts']);
         $router->post('/api/admin/heartbeat', [AdminController::class, 'heartbeat']);
+        $router->post('/api/admin/force-logout', [AdminController::class, 'forceLogoutSession']);
+        
         $router->post('/api/student/heartbeat', [StudentController::class, 'heartbeat']);
 
         // ===== EXAM JSON API =====

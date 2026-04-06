@@ -85,6 +85,7 @@ $admin = $admin ?? [];
 window.ExamAppPage = Object.assign({}, window.ExamAppPage || {}, {
     type: 'admin-dashboard',
     heartbeatUrl: '<?= e(rtrim((string) \App\Core\Config::get('app.base_url', ''), '/') . '/api/admin/heartbeat') ?>',
-    csrfHeartbeat: '<?= e((string) ($csrf_heartbeat ?? '')) ?>'
+    csrfHeartbeat: '<?= e((string) ($csrf_heartbeat ?? '')) ?>',
+    csrfForceLogout: '<?= e((string) ($csrf_force_logout ?? '')) ?>'
 });
 </script>
