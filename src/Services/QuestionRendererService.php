@@ -573,12 +573,59 @@ final class QuestionRendererService
 
     private function generateLegacyBlocks(array $context): array
     {
-        $first = $this->legacyBlockGenerator(1,$context);
-        $second = $this->legacyBlockGenerator(2,$context);
+        $first = $this->safeLegacyBlockGenerator(1, $context);
+        $second = $this->safeLegacyBlockGenerator(2, $context);
 
         return [
             'html' => $first['qst'] . $second['qst'],
             'expected' => array_merge($first['expected'], $second['expected']),
+        ];
+    }
+
+    private function safeLegacyBlockGenerator(int $n, array $context): array
+    {
+        try {
+            return $this->legacyBlockGenerator($n, $context);
+        } catch (\Throwable $e) {
+            // IMPORTANT : ne jamais casser le rendu élève
+            error_log('LegacyBlock fallback n=' . $n . ' : ' . $e->getMessage());
+
+            return $this->legacyEmergencyBlock($n);
+        }
+    }
+
+    private function legacyEmergencyBlock(int $n): array
+    {
+        // Bloc simple, toujours valide, avec négatif
+        $a1 = 10;
+        $a2 = 3;
+        $a3 = 4;
+        $a5 = 2;
+        $a6 = 3;
+        $a7 = 2;
+
+        // (a4 - a5*a6)/a7 = -2
+        $a4 = $a5 * $a6 - 2 * $a7;
+
+        $A1 = $a1 + $a2 * $a3 + ($a4 - $a5 * $a6) / $a7;
+
+        $a8 = 2;
+        $a9 = 3;
+        $A2 = (int) ($A1 / $a8 - $a9);
+
+        $a10 = 2;
+        $A3 = (int) ($A2 / $a10);
+
+        return [
+            'qst' =>
+                "<br>A={$a1}+{$a2}*{$a3}+({$a4}-{$a5}*{$a6})/{$a7} [__INPUT_{$n}_1__]" .
+                "<br>A=A/{$a8}-{$a9} [__INPUT_{$n}_2__]" .
+                "<br>A=A/{$a10} [__INPUT_{$n}_3__]<br>",
+            'expected' => [
+                (string) $A1,
+                (string) $A2,
+                (string) $A3,
+            ],
         ];
     }
 
@@ -622,66 +669,60 @@ final class QuestionRendererService
 
     private function legacyBlockGenerator(int $n, array $context): array
     {
-        $seed = $this->buildLegacySeed($n, $context);
+        $userId  = (int) ($context['user_id'] ?? 0);
+        $classId = (int) ($context['class_id'] ?? 0);
+        $examId  = (int) ($context['exam_id'] ?? 0);
 
-        mt_srand($seed);
+        $value = ($userId * 7) + ($n * 13) + ($classId * $examId);
 
-        do {
-            $a1 = mt_rand(10, 20);
-            $a2 = mt_rand(2, 9);
-            $a3 = mt_rand(2, 9);
+        // Réduction de plage pour garder A1 raisonnable
+        $A3 = $value % 3 + 2;   // 2..4
+        $a10 = $value % 3 + 2;  // 2..4
+        $A2 = $A3 * $a10;       // 4..16
 
-            $a5 = mt_rand(2, 3);
-            $a6 = mt_rand(2, 3);
-            $a7 = mt_rand(2, 9);
+        $a9 = $a10 + 1;         // 3..5
+        $a8 = $value % 2 + 2;   // 2..3
 
-            $k = mt_rand(0, 3);
-            $a4 = ($a5 * $a6) + ($k * $a7);
+        // Sens inverse de : A = A / a8 - a9
+        $A1 = ($A2 + $a9) * $a8;
 
-            if ($a4 < 2 || $a4 > 9) {
-                continue;
-            }
+        $a5 = $value % 3 + 7;   // 7..9
+        $a6 = $value % 3 + 6;   // 6..8
+        $a7 = $a10;             // 2..4
 
-            $A1 = $a1 + $a2 * $a3 + $k;
+        // Terme volontairement négatif
+        // (a4 - a5*a6)/a7 = -ceil(A1/5)
+        $negativeTerm = (int) ceil($A1 / 5);
+        $a4 = $a5 * $a6 - $a7 * $negativeTerm;
 
-            if ($A1 <= 0 || $A1 >= 50) {
-                continue;
-            }
+        $a2 = $value % 4 + 3;   // 3..6
+        $a3 = $value % 5 + 2;   // 2..6
 
-            $a8 = mt_rand(2, 9);
-            $a9 = mt_rand(2, 9);
+        $a1 = $A1 - $a2 * $a3 - (($a4 - $a5 * $a6) / $a7);
 
-            $tmpA2 = ($A1 / $a8) - $a9;
+        $calcA1 = $a1 + $a2 * $a3 + ($a4 - $a5 * $a6) / $a7;
+        $calcA2 = $calcA1 / $a8 - $a9;
+        $calcA3 = $calcA2 / $a10;
 
-            if (!$this->isWholeNumber($tmpA2)) {
-                continue;
-            }
+        if (
+            !$this->isWholeNumber($calcA1) ||
+            !$this->isWholeNumber($calcA2) ||
+            !$this->isWholeNumber($calcA3)
+        ) {
+            throw new \RuntimeException('Generated legacy block contains non-integer values.');
+        }
 
-            $A2 = (int) $tmpA2;
+        $calcA1 = (int) $calcA1;
+        $calcA2 = (int) $calcA2;
+        $calcA3 = (int) $calcA3;
 
-            if ($A2 <= 0 || $A2 >= 50) {
-                continue;
-            }
+        if ($calcA1 !== $A1 || $calcA2 !== $A2 || $calcA3 !== $A3) {
+            throw new \RuntimeException('Generated legacy block is inconsistent.');
+        }
 
-            $a10 = mt_rand(2, 9);
-
-            $tmpA3 = $A2 / $a10;
-
-            if (!$this->isWholeNumber($tmpA3)) {
-                continue;
-            }
-
-            $A3 = (int) $tmpA3;
-
-            if ($A3 <= 0 || $A3 >= 50) {
-                continue;
-            }
-
-            break;
-
-        } while (true);
-
-        mt_srand(); // reset
+        if ($A1 <= 0 || $A1 >= 50 || $A2 <= 0 || $A2 >= 50 || $A3 <= 0 || $A3 >= 50) {
+            throw new \RuntimeException('Generated legacy block is out of expected bounds.');
+        }
 
         return [
             'qst' =>
