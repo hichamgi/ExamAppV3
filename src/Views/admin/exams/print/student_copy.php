@@ -140,9 +140,9 @@ $studentName = trim((string) (($student['nom'] ?? '') . ' ' . ($student['prenom'
         <td class="header-title" colspan="2">Impression administrative</td>
     </tr>
     <tr>
-        <td><strong>Examen ID :</strong></td>
+        <td style="width:15%;"><strong>Examen ID :</strong></td>
         <td><?= (int) $exam_id ?></td>
-        <td><strong>Classe :</strong></td>
+        <td style="width:15%;"><strong>Classe :</strong></td>
         <td><?= e($student['class_name'] ?? '') ?></td>
     </tr>
     <tr>

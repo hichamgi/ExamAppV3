@@ -517,7 +517,13 @@ $allowPrint = !empty($exam['allow_print']);
                                     <td class="small"><?= e($result['started_at'] ?? '') ?></td>
                                     <td class="small"><?= e($result['submitted_at'] ?? '') ?></td>
                                     <td class="text-center">
-                                        <?php if ($allowPrint && $userExamId > 0): ?>
+                                        <?php if (!$allowPrint || $userExamId <= 0): ?>
+                                            <span class="text-muted">—</span>
+                                        <?php elseif (!empty($result['is_absent'])): ?>
+                                            <span class="badge text-bg-secondary">Absent</span>
+                                        <?php elseif (!empty($result['is_cheat'])): ?>
+                                            <span class="badge text-bg-danger">Triche</span>
+                                        <?php else: ?>
                                             <button
                                                 type="button"
                                                 class="btn btn-sm btn-outline-secondary"
@@ -526,8 +532,6 @@ $allowPrint = !empty($exam['allow_print']);
                                             >
                                                 <i class="bi bi-printer"></i>
                                             </button>
-                                        <?php else: ?>
-                                            <span class="text-muted">—</span>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
