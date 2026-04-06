@@ -234,6 +234,37 @@ body.app-body {
     text-align: center;
 }
 
+.exam-code {
+    display: inline-block;
+    margin: 0;
+    padding: 4px 8px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 13px;
+    line-height: 1.35;
+    white-space: pre;
+    color: #212529;
+    vertical-align: middle;
+}
+
+.exam-code-block {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    margin: 0;
+    padding: 8px 10px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 13px;
+    line-height: 1.4;
+    white-space: pre;
+    color: #212529;
+}
+
 @keyframes heartbeatPulse {
     0% { transform: scale(1); }
     50% { transform: scale(1.12); }
